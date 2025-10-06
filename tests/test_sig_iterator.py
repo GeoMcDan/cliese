@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from testproj.signature.signature_nodes import (
+from testproj.signature.nodes import (
     SigElement,
     SigNameElement,
     SigParamGroupElement,

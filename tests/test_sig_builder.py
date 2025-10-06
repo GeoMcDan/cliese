@@ -2,7 +2,7 @@ import inspect
 from inspect import Signature
 
 from testproj.signature.builder import SigBuilder
-from testproj.signature.signature_nodes import ParameterKind
+from testproj.signature.nodes import ParameterKind
 
 
 def test_placeholder():

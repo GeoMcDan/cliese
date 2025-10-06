@@ -1,7 +1,7 @@
 import inspect
 from functools import singledispatchmethod
 
-from testproj.signature.signature_nodes import (
+from testproj.signature.nodes import (
     ParameterKind,
     SigElement,
     SigElementBase,
