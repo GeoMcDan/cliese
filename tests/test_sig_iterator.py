@@ -9,7 +9,7 @@ from testproj.signature.nodes import (
     SigParamGroupElement,
     SigReturnElement,
 )
-from testproj.signature.signature_visitor import SigVisitor, SigVisitorPrint
+from testproj.signature.visitor import SigVisitor, SigVisitorPrint
 
 logger = logging.getLogger(__name__)
 
