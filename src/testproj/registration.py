@@ -1,10 +1,13 @@
 from contextlib import contextmanager
+from typing import Callable
 
-_func = None
+HookSpec = Callable[[str, object], None]
+
+_func: HookSpec = None
 
 
 @contextmanager
-def register(func):
+def register(func: HookSpec):
     global _func
     prevf = _func
 

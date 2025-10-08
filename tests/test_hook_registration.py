@@ -1,5 +1,9 @@
+import logging
+
 from testproj import registration
 from testproj.typer import ExtendedTyper
+
+logger = logging.getLogger(__name__)
 
 
 def test_global_registration():
@@ -36,25 +40,22 @@ def test_command_registration():
     from typer.testing import CliRunner
 
     runner = CliRunner()
-
     app = ExtendedTyper()
-
     ran = False
 
-    def fake4():
+    def fake4(event: str, obj):
         nonlocal ran
+        logging.info("%s: %s", event, obj)
         ran = True
 
     assert ran is False, "First test"
 
     @app.command("test-command", register=fake4)
     def cmd_test():
-        import typer
-
-        raise typer.Exit(-1)
+        return -1
 
     assert ran is False, "Second test"
     result = runner.invoke(app)
 
-    assert int(result.exit_code) == -1
+    assert result.exit_code == -1
     assert ran is True
