@@ -12,47 +12,50 @@ class ExtendedTyper(typer.Typer):
     @wraps(typer.Typer.__init__)
     def __init__(self, *args, **kwargs):
         extension = kwargs.pop("register", self.__class__.get_registration_func())
+        decorator = kwargs.pop("decorate", self.__class__.get_decorator())
         self.extension = cast(registration.HookSpec, extension)
+        self.decorator = decorator
         super().__init__(*args, **kwargs)
 
     @classmethod
     def get_registration_func(cls) -> registration.HookSpec:
         return registration._func
 
+    @classmethod
+    def get_decorator(cls):
+        return registration._decorator
+
     def register(self, func: registration.HookSpec):
         self.extension = func
 
+    def register_decorator(self, decorator):
+        self.decorator = decorator
+
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):
-        extension = cast(registration.HookSpec, kwargs.pop("register", self.extension))
+        extension = cast(object, kwargs.pop("register", self.extension))
+        decorator = kwargs.pop("register_decorator", self.decorator)
         base_decorator = super().command(*args, **kwargs)
+
+        def extension_wrapper(func):
+            def wrapper(*args_, **kwargs_):
+                if extension:
+                    extension("pre-invoke", (args_, kwargs_))
+                result = func(*args_, **kwargs_)
+                return result
+
+            return wrapper
 
         def _decorate(func):
             @base_decorator
             @wraps(func)
             def wrapper(*args_, **kwargs_):
-                # CONSIDER:
-                # instead of pre-invoke/post-invoke event hooks
-                # instead I could pass the wrapper function to the hook
-                # If implementer wanted to inspect args/kwargs or return value, they could
-                extension("pre-invoke", (args_, kwargs_))
+                _func = extension_wrapper(func)
+                if decorator:
+                    _func = decorator(_func)
+                result = _func(*args_, **kwargs_)
+                raise typer.Exit(result)
 
-                # implementation is getting heavy...
-                # should TRY...EXCEPT be part of hook?
-                # should result handling be part of hook?
-                result = NO_RESULT
-                try:
-                    # Invoke command target function
-                    result = func(*args_, **kwargs_)
-                    raise typer.Exit(result)
-                except Exception as e:
-                    extension("invoke-error", e)
-                    raise
-                finally:
-                    if result is not NO_RESULT:
-                        extension("post-invoke", result)
-
-            # return base_decorator(wrapper)
             return wrapper
 
         return _decorate
