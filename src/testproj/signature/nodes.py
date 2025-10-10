@@ -37,7 +37,7 @@ class SigParamElement(SigElementBase):
     param: object = dataclasses.field(repr=False, kw_only=True)
     param_name: str = dataclasses.field(kw_only=True)
     param_default: object = dataclasses.field(kw_only=True)
-    param_annotation: type = dataclasses.field(kw_only=True)
+    param_annotation: "SigAnnotationElement" = dataclasses.field(kw_only=True)
     param_kind: ParameterKind = dataclasses.field(kw_only=True)
 
     @classmethod
@@ -47,23 +47,12 @@ class SigParamElement(SigElementBase):
             param=param,
             param_name=name,
             param_default=param.default,
-            param_annotation=param.annotation,
+            param_annotation=SigAnnotationElement(param.annotation),
             param_kind=ParameterKind(param.kind),
         )
 
     def __repr__(self):
-        annotation = self.param_annotation
-
-        if annotation is None:
-            annotation = ": None"
-        if annotation is inspect.Parameter.empty:
-            annotation = ""
-        elif hasattr(annotation, "__qualname__"):
-            annotation = ": " + annotation.__qualname__
-        elif hasattr(annotation, "__name__"):
-            annotation = ": " + annotation.__name__
-        else:
-            annotation = ": " + repr(annotation)
+        annotation = ": " if not self.param_annotation.is_empty() else ""
 
         default = ""
         if self.param_default is not inspect.Parameter.empty:
@@ -72,8 +61,28 @@ class SigParamElement(SigElementBase):
 
 
 @dataclass(frozen=True)
-class SigReturnElement(SigElementBase):
+class SigAnnotationElement(SigElementBase):
     annotation: type
+
+    def is_empty(self):
+        return self.annotation is inspect.Parameter.empty
+
+    def __repr__(self):
+        if self.annotation is inspect.Parameter.empty:
+            return ""
+        elif hasattr(self.annotation, "__qualname__"):
+            return self.annotation.__qualname__
+        elif hasattr(self.annotation, "__name__"):
+            return self.annotation.__name__
+        elif self.annotation is None:
+            return "None"
+        else:
+            return repr(self.annotation)
+
+
+@dataclass(frozen=True)
+class SigReturnElement(SigElementBase):
+    annotation: SigAnnotationElement
 
     def __repr__(self):
         if hasattr(self.annotation, "__qualname__"):
@@ -131,7 +140,7 @@ class SigElement(SigElementBase, ABCIterable):
         sig = inspect.signature(func)
         self.name = SigNameElement(func.__name__)
         self.parameters = SigParamGroupElement(sig.parameters)
-        self.return_ = SigReturnElement(sig.return_annotation)
+        self.return_ = SigReturnElement(SigAnnotationElement(sig.return_annotation))
 
     def __iter__(self):
         yield self.name

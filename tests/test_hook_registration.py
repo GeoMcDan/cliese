@@ -1,8 +1,11 @@
 import logging
 
+from typer.testing import CliRunner
+
 from testproj import registration
 from testproj.typer import ExtendedTyper
 
+runner = CliRunner()
 logger = logging.getLogger(__name__)
 
 
@@ -37,9 +40,6 @@ def test_app_registration_set():
 
 
 def test_command_extension():
-    from typer.testing import CliRunner
-
-    runner = CliRunner()
     app = ExtendedTyper()
     ran = False
 
@@ -62,9 +62,6 @@ def test_command_extension():
 
 
 def test_command_decorator():
-    from typer.testing import CliRunner
-
-    runner = CliRunner()
     app = ExtendedTyper()
     ran = False
 
@@ -88,3 +85,57 @@ def test_command_decorator():
 
     assert ran is True
     assert int(result.exit_code) == -1
+
+
+def test_command_decorator_app_setter():
+    def fake4(func):
+        def wrapper(*args, **kwargs):
+            nonlocal ran
+            ran = True
+            result = func(*args, **kwargs)
+            return result
+
+        return wrapper
+
+    app = ExtendedTyper()
+    app.register_decorator(fake4)
+    ran = False
+
+    assert ran is False, "First test"
+
+    @app.command("test-command")
+    def cmd_test():
+        return -1
+
+    assert ran is False, "Second test"
+    result = runner.invoke(app)
+
+    assert ran is True
+    assert int(result.exit_code) == -1
+
+
+def test_command_decorator_global_setter():
+    def fake4(func):
+        def wrapper(*args, **kwargs):
+            nonlocal ran
+            ran = True
+            result = func(*args, **kwargs)
+            return result
+
+        return wrapper
+
+    with registration.register_decorator(fake4):
+        app = ExtendedTyper()
+        ran = False
+
+        assert ran is False, "First test"
+
+        @app.command("test-command")
+        def cmd_test():
+            return -1
+
+        assert ran is False, "Second test"
+        result = runner.invoke(app)
+
+        assert ran is True
+        assert int(result.exit_code) == -1

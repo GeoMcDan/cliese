@@ -36,11 +36,8 @@ class SigVisitor(SigVisitorBase):
         elif sig_elem.param_kind == ParameterKind.VAR_KW:
             txt = "**" + txt
 
-        if sig_elem.param_annotation is not inspect.Parameter.empty:
-            if hasattr(sig_elem.param_annotation, "__qualname__"):
-                txt += ": " + sig_elem.param_annotation.__qualname__
-            else:
-                txt += ": " + str(sig_elem.param_annotation)
+        if not sig_elem.param_annotation.is_empty():
+            txt += ": " + repr(sig_elem.param_annotation)
 
         if sig_elem.param_default is not inspect.Parameter.empty:
             txt += " = " + str(sig_elem.param_default)
@@ -78,17 +75,10 @@ class SigVisitor(SigVisitorBase):
     def _(self, sig_elem: SigReturnElement):
         if sig_elem.annotation is None:
             self.signature += " -> None"
-        elif sig_elem.annotation is inspect.Signature.empty:
+        elif sig_elem.annotation.is_empty():
             pass
-        elif sig_elem.annotation:
-            if hasattr(sig_elem.annotation, "__qualname__"):
-                self.signature += " -> " + sig_elem.annotation.__qualname__
-            elif hasattr(sig_elem.annotation, "__name__"):
-                self.signature += " -> " + sig_elem.annotation.__name__
-            else:
-                self.signature += " -> " + repr(sig_elem.annotation)
-        elif sig_elem.annotation:
-            self.signature += " -> " + sig_elem.annotation.__qualname__
+        else:
+            self.signature += " -> " + repr(sig_elem.annotation)
 
 
 class SigVisitorPrint(SigVisitorBase):
@@ -113,11 +103,8 @@ class SigVisitorPrint(SigVisitorBase):
         elif sig_elem.param_kind == ParameterKind.VAR_KW:
             txt = "**" + txt
 
-        if sig_elem.param_annotation is not inspect.Parameter.empty:
-            if hasattr(sig_elem.param_annotation, "__qualname__"):
-                txt += ": " + sig_elem.param_annotation.__qualname__
-            else:
-                txt += ": " + str(sig_elem.param_annotation)
+        if not sig_elem.param_annotation.is_empty():
+            txt += ": " + repr(sig_elem.param_annotation)
 
         if sig_elem.param_default is not inspect.Parameter.empty:
             txt += " = " + str(sig_elem.param_default)
