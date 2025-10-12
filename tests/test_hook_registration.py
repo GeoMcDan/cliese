@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 def test_global_registration():
     def fake(): ...
 
-    with registration.register(fake):
+    with registration.registration_context() as ctx:
+        assert ExtendedTyper.get_registration_func() is None
+        ctx.register(fake)
         assert ExtendedTyper.get_registration_func() is fake
 
     assert ExtendedTyper.get_registration_func() is None
@@ -57,6 +59,7 @@ def test_command_extension():
     assert ran is False, "Second test"
     result = runner.invoke(app)
 
+    # logger.debug("Result: %s", result)
     assert result.exit_code == -1
     assert ran is True
 
@@ -124,7 +127,8 @@ def test_command_decorator_global_setter():
 
         return wrapper
 
-    with registration.register_decorator(fake4):
+    with registration.registration_context() as ctx:
+        ctx.register_decorator(fake4)
         app = ExtendedTyper()
         ran = False
 

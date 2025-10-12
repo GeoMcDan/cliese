@@ -1,27 +1,54 @@
+from collections import defaultdict
 from contextlib import contextmanager
-from typing import Callable
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Any, Callable
 
 HookSpec = Callable[[str, object], None]
 
-_func: HookSpec = None
-_decorator = None
+
+@dataclass
+class RegistrationContext:
+    func: HookSpec | None = field(default=None, kw_only=True)
+    decorator: Any = field(default=None, kw_only=True)
+    extensions: MappingProxyType[str, list[object]] = field(
+        default_factory=lambda: defaultdict(list), kw_only=True
+    )
+
+    def register_decorator(self, decorator):
+        self.decorator = decorator
+
+    def register(self, func: HookSpec):
+        self.func = func
+
+    def register_extension(self, ext_key: str, ext: object):
+        self.extensions[ext_key].append(ext)
 
 
-@contextmanager
-def register_decorator(decorator):
-    global _decorator
-    prevd = _decorator
-
-    _decorator = decorator
-    yield
-    _decorator = prevd
+_global_context = RegistrationContext()
 
 
-@contextmanager
+def register_extension(ext_key: str, ext: object):
+    global _global_context
+    _global_context.register_extension(ext_key, ext)
+
+
 def register(func: HookSpec):
-    global _func
-    prevf = _func
+    global _global_context
+    _global_context.register(func)
 
-    _func = func
-    yield
-    _func = prevf
+
+def register_decorator(decorator):
+    global _global_context
+    _global_context.register_decorator(decorator)
+
+
+@contextmanager
+def registration_context():
+    global _global_context
+    prev_context = _global_context
+    context = RegistrationContext()
+
+    _global_context = context
+    yield context
+    _global_context = prev_context
