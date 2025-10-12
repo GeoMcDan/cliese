@@ -25,6 +25,7 @@ class RegistrationContext:
         self.extensions[ext_key].append(ext)
 
 
+# TODO: consider thread local storage if we ever go multi-threaded
 _global_context = RegistrationContext()
 
 

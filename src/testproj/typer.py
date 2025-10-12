@@ -65,13 +65,15 @@ class ExtendedTyper(typer.Typer):
             def wrapper(*args_, **kwargs_):
                 if event_handler:
                     event_handler("pre-invoke", (args_, kwargs_))
-                result = func(*args_, **kwargs_)
 
+                result = func(*args_, **kwargs_)
                 command_result = CommandResult(result)
+
                 if event_handler:
                     # TODO: think about a context object, it would include an optional return result
                     # as it is return None is ambiguous, use a sentinal to indicate explicitly no result
                     event_handler("post-invoke", (args_, kwargs_, command_result))
+
                 return command_result
 
             if event_handler:
