@@ -1,5 +1,6 @@
 import logging
 
+import pytest
 from typer.testing import CliRunner
 
 from testproj import registration
@@ -115,6 +116,27 @@ def test_command_decorator_app_setter():
 
     assert ran is True
     assert int(result.exit_code) == -1
+
+
+def test_command_with_unsupported_type():
+    app = ExtendedTyper()
+    with registration.registration_context():
+
+        @app.command()
+        def cmd_test():
+            return -1
+
+        result = runner.invoke(app)
+        assert result.exit_code == -1
+
+    with registration.registration_context():
+
+        @app.command()
+        def cmd_test2(param: logging.Logger = None):
+            return -1
+
+        with pytest.raises(RuntimeError):
+            result = runner.invoke(app)
 
 
 def test_command_decorator_global_setter():
