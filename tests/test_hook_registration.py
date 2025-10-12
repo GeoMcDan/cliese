@@ -15,7 +15,7 @@ def test_global_registration():
 
     with registration.registration_context() as ctx:
         assert ExtendedTyper.get_registration_func() is None
-        ctx.register(fake)
+        ctx.register_handler(fake)
         assert ExtendedTyper.get_registration_func() is fake
 
     assert ExtendedTyper.get_registration_func() is None
@@ -24,8 +24,8 @@ def test_global_registration():
 def test_app_registration_init():
     def fake2(): ...
 
-    app = ExtendedTyper(register=fake2)
-    assert app.extension is fake2
+    app = ExtendedTyper(event_handler=fake2)
+    assert app.event_handler is fake2
     assert ExtendedTyper.get_registration_func() is None
 
     @app.command()
@@ -38,7 +38,7 @@ def test_app_registration_set():
     app = ExtendedTyper()
     app.register(fake3)
 
-    assert app.extension is fake3
+    assert app.event_handler is fake3
     assert ExtendedTyper.get_registration_func() is None
 
 
@@ -53,7 +53,7 @@ def test_command_extension():
 
     assert ran is False, "First test"
 
-    @app.command("test-command", register=fake4)
+    @app.command("test-command", event_handler=fake4)
     def cmd_test():
         return -1
 
@@ -156,7 +156,7 @@ def test_command_decorator_global_setter():
 
         assert ran is False, "First test"
 
-        @app.command("test-command")
+        @app.command()
         def cmd_test():
             return -1
 

@@ -30,50 +30,52 @@ class CommandResult:
 class ExtendedTyper(typer.Typer):
     @wraps(typer.Typer.__init__)
     def __init__(self, *args, **kwargs):
-        extension = kwargs.pop("register", self.__class__.get_registration_func())
+        event_handler = kwargs.pop(
+            "event_handler", self.__class__.get_registration_func()
+        )
         decorator = kwargs.pop("decorate", self.__class__.get_decorator())
-        self.extension = cast(registration.HookSpec, extension)
+        self.event_handler = cast(registration.HookSpec, event_handler)
         self.decorator = decorator
         super().__init__(*args, **kwargs)
 
     @classmethod
     def get_registration_func(cls) -> registration.HookSpec:
-        return registration._global_context.func
+        return registration._global_context.event_handler
 
     @classmethod
     def get_decorator(cls):
         return registration._global_context.decorator
 
-    def register(self, func: registration.HookSpec):
-        self.extension = func
+    def register(self, event_handler: registration.HookSpec, /):
+        self.event_handler = event_handler
 
     def register_decorator(self, decorator):
         self.decorator = decorator
 
     def use_extension(self, key: str):
-        self.extension = registration._global_context.extensions[key]
+        self.event_handler = registration._global_context.extensions[key]
 
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):
-        extension = cast(object, kwargs.pop("register", self.extension))
+        event_handler = cast(object, kwargs.pop("event_handler", self.event_handler))
         decorator = kwargs.pop("register_decorator", self.decorator)
         base_decorator = super().command(*args, **kwargs)
 
         def extension_wrapper(func):
             def wrapper(*args_, **kwargs_):
-                if extension:
-                    extension("pre-invoke", (args_, kwargs_))
+                if event_handler:
+                    event_handler("pre-invoke", (args_, kwargs_))
                 result = func(*args_, **kwargs_)
 
                 command_result = CommandResult(result)
-                if extension:
+                if event_handler:
                     # TODO: think about a context object, it would include an optional return result
                     # as it is return None is ambiguous, use a sentinal to indicate explicitly no result
-                    extension("post-invoke", (args_, kwargs_, command_result))
+                    event_handler("post-invoke", (args_, kwargs_, command_result))
                 return command_result
 
-            if extension:
-                wrapper_result = extension("process_command", wrapper)
+            if event_handler:
+                wrapper_result = event_handler("process_command", wrapper)
             else:
                 wrapper_result = None
             return wrapper_result or wrapper

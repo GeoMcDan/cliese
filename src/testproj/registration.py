@@ -9,7 +9,7 @@ HookSpec = Callable[[str, object], None]
 
 @dataclass
 class RegistrationContext:
-    func: HookSpec | None = field(default=None, kw_only=True)
+    event_handler: HookSpec | None = field(default=None, kw_only=True)
     decorator: Any = field(default=None, kw_only=True)
     extensions: MappingProxyType[str, list[object]] = field(
         default_factory=lambda: defaultdict(list), kw_only=True
@@ -18,8 +18,8 @@ class RegistrationContext:
     def register_decorator(self, decorator):
         self.decorator = decorator
 
-    def register(self, func: HookSpec):
-        self.func = func
+    def register_handler(self, event_handler: HookSpec):
+        self.event_handler = event_handler
 
     def register_extension(self, ext_key: str, ext: object):
         self.extensions[ext_key].append(ext)
@@ -33,9 +33,9 @@ def register_extension(ext_key: str, ext: object):
     _global_context.register_extension(ext_key, ext)
 
 
-def register(func: HookSpec):
+def register_handler(func: HookSpec):
     global _global_context
-    _global_context.register(func)
+    _global_context.register_handler(func)
 
 
 def register_decorator(decorator):
