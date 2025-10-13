@@ -1,10 +1,13 @@
 from functools import wraps
+from logging import DEBUG, Logger
 from typing import cast
 
 import typer
 
 from testproj import registration
 
+logger = Logger(__name__)
+logger.setLevel(DEBUG)
 NO_RESULT = object()
 
 
@@ -53,6 +56,8 @@ class ExtendedTyper(typer.Typer):
         self.decorator = decorator
 
     def use_extension(self, key: str):
+        if key not in registration._global_context.extensions:
+            raise KeyError(f"No extension registered for key: {key}")
         self.event_handler = registration._global_context.extensions[key]
 
     @wraps(typer.Typer.command)
@@ -76,11 +81,7 @@ class ExtendedTyper(typer.Typer):
 
                 return command_result
 
-            if event_handler:
-                wrapper_result = event_handler("process_command", wrapper)
-            else:
-                wrapper_result = None
-            return wrapper_result or wrapper
+            return wrapper
 
         def _decorate(func):
             @base_decorator

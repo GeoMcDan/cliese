@@ -2,9 +2,7 @@ import logging
 from logging import Logger
 from typing import Annotated
 
-import pytest
-import typer
-from typer import Context, Option
+from typer import Option
 from typer.testing import CliRunner
 
 from testproj import registration
@@ -40,12 +38,6 @@ class ExtendedContext:
         print("Creating ExtendedContext")
 
 
-@pytest.fixture
-def setup_logger_extension():
-    with registration.registration_context() as ctx:
-        yield ctx
-
-
 def test_param_logger(setup_logger_extension):
     setup_logger_extension.register_extension("logger", Logger)
 
@@ -54,12 +46,8 @@ def test_param_logger(setup_logger_extension):
 
     @app.command()
     def func(
-        ctx: Context,
         logger: Annotated[Logger, Option("--verbose", "-v", count=True)] = None,
     ):
-        obj = ctx.ensure_object(ExtendedContext)
-        typer.echo(f"_Logger_: {obj}")
-        _logger.debug(f"Logger: {logger}")
         return 0
 
     result = runner.invoke(app, ["-vvv"])

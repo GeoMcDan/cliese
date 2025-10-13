@@ -1,4 +1,5 @@
 import logging
+from unittest import mock
 
 import pytest
 from typer.testing import CliRunner
@@ -165,3 +166,16 @@ def test_command_decorator_global_setter():
 
         assert ran is True
         assert int(result.exit_code) == -1
+
+
+def test_register_and_use(setup_logger_extension):
+    setup_logger_extension.register_extension("logger", mock.sentinel.Logger)
+    app = ExtendedTyper()
+
+    with pytest.raises(KeyError):
+        app.use_extension("loggerx")
+
+    app.use_extension("logger")
+    assert isinstance(app.event_handler, list)
+    assert len(app.event_handler) == 1
+    assert app.event_handler[0] is mock.sentinel.Logger
