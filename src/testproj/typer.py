@@ -1,7 +1,7 @@
 import inspect
 from functools import wraps
 from logging import getLogger
-from typing import cast
+from typing import Iterable, cast
 
 import typer
 
@@ -30,7 +30,25 @@ class CommandResult:
         return f"CommandResult(result={self.result}, exit_code={self.exit_code})"
 
 
+class _EventDispatch:
+    def __init__(self, event_handler):
+        # logger.debug("event_handler: %s (%s)", event_handler, type(event_handler))
+        self.handlers = []
+        if isinstance(event_handler, Iterable):
+            self.handlers = event_handler
+        elif event_handler is not None:
+            self.handlers = [event_handler]
+        # logger.debug("self.handler: %s (%s)", self.handlers, type(self.handlers))
+
+    def __call__(self, *args, **kwargs):
+        for handler in self.handlers:
+            # logger.debug("Handler: %s", handler)
+            handler(*args, **kwargs)
+
+
 class ExtendedTyper(typer.Typer):
+    event_dispatch = _EventDispatch
+
     @wraps(typer.Typer.__init__)
     def __init__(self, *args, **kwargs):
         event_handler = kwargs.pop(
@@ -39,6 +57,7 @@ class ExtendedTyper(typer.Typer):
         decorator = kwargs.pop("decorate", self.__class__.get_decorator())
         self.event_handler = cast(registration.HookSpec, event_handler)
         self.decorator = decorator
+        self.extension = kwargs.pop("extension", self.__class__.get_extension())
         super().__init__(*args, **kwargs)
 
     @classmethod
@@ -48,6 +67,10 @@ class ExtendedTyper(typer.Typer):
     @classmethod
     def get_decorator(cls):
         return registration._global_context.decorator
+
+    @classmethod
+    def get_extension(cls):
+        return registration._global_context.extensions
 
     def register(self, event_handler: registration.HookSpec, /):
         self.event_handler = event_handler
@@ -62,7 +85,9 @@ class ExtendedTyper(typer.Typer):
 
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):
-        event_handler = cast(object, kwargs.pop("event_handler", self.event_handler))
+        event_handler = self.event_dispatch(
+            kwargs.pop("event_handler", self.event_handler)
+        )
         decorator = kwargs.pop("register_decorator", self.decorator)
         base_decorator = super().command(*args, **kwargs)
 
@@ -87,9 +112,6 @@ class ExtendedTyper(typer.Typer):
             def _temp_int(logger: int):
                 pass
 
-            temp_sig = inspect.signature(_temp_int)
-            func.__signature__ = temp_sig
-
             @wraps(func)
             @base_decorator
             def wrapper(*args_, **kwargs_):
@@ -108,14 +130,20 @@ class ExtendedTyper(typer.Typer):
 
             # this will get run all commands on the full ExtendedTyper app
             # so we need to filter to what we are decorating
+            isany = False
             for cmd in self.registered_commands:
                 if cmd.callback != wrapper:
                     logger.debug(
-                        "continuing after %s%s"
-                        % (cmd.callback.__name__, inspect.signature(cmd.callback))
+                        "continuing after %s%s",
+                        cmd.callback.__name__,
+                        inspect.signature(cmd.callback),
                     )
                     continue
+                isany = True
+            else:
+                assert isany
 
+            event_handler("command", (self, wrapper))
             return wrapper
 
         return _decorate

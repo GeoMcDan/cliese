@@ -38,21 +38,29 @@ class ExtendedContext:
         print("Creating ExtendedContext")
 
 
+def peek_command(event, args):
+    _logger.debug("Peek:\n\tEvent: %s\n\tArgs: %s", event, args)
+
+
 def test_param_logger(setup_logger_extension):
-    setup_logger_extension.register_extension("logger", Logger)
+    setup_logger_extension.register_extension("logger", peek_command)
 
     app = ExtendedTyper()
     app.use_extension("logger")
 
     @app.command()
     def func(
-        logger: Annotated[Logger, Option("--verbose", "-v", count=True)] = None,
+        logger: Annotated[int, Option("--verbose", "-v", count=True)] = None,
     ):
-        return 0
+        # _logger.debug("func command, param value: %s", logger)
+        return logger
 
     # _logger.debug("Testing")
-    result = runner.invoke(app, ["--verbose", 3])
-    assert result.exit_code == 0
+    result = runner.invoke(app, "-vvv")
+    if result.exception and not isinstance(result.exception, SystemExit):
+        raise result.exception
+
+    assert result.exit_code == 3
 
 
 def test_change_signature():

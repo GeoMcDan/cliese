@@ -23,7 +23,7 @@ def test_global_registration():
 
 
 def test_app_registration_init():
-    def fake2(): ...
+    def fake2(*args, **kwargs): ...
 
     app = ExtendedTyper(event_handler=fake2)
     assert app.event_handler is fake2
@@ -45,25 +45,25 @@ def test_app_registration_set():
 
 def test_command_extension():
     app = ExtendedTyper()
-    ran = False
+    ran = ""
 
     def fake4(event: str, obj):
         nonlocal ran
-        logger.info("%s: %s", event, obj)
-        ran = True
+        logger.debug("fake4: (%s, %s)", repr(event), obj)
+        ran = event
 
-    assert ran is False, "First test"
+    assert ran == "", "First test"
 
     @app.command("test-command", event_handler=fake4)
     def cmd_test():
         return -1
 
-    assert ran is False, "Second test"
-    result = runner.invoke(app, ["--logger", 3])
+    assert ran == "command", "Last event ran"
+    result = runner.invoke(app)
 
     # logger.debug("Result: %s", result)
     assert result.exit_code == -1
-    assert ran is True
+    assert ran == "post-invoke"
 
 
 def test_command_decorator():
@@ -89,7 +89,7 @@ def test_command_decorator():
     result = runner.invoke(app)
 
     assert ran is True
-    assert int(result.exit_code) == -1
+    assert result.exit_code == -1
 
 
 def test_command_decorator_app_setter():
