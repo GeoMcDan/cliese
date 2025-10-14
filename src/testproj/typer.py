@@ -1,7 +1,7 @@
 import inspect
 from functools import wraps
 from logging import getLogger
-from typing import Iterable, cast
+from typing import Any, Iterable, Protocol, Type, cast
 
 import typer
 
@@ -11,12 +11,22 @@ logger = getLogger(__name__)
 NO_RESULT = object()
 
 
-# TODO: Provide a protocol for this, update references,
-# the result to exit code is temporary default behavior for convenience now.
-class CommandResult:
+class CommandResultProtocol(Protocol):
+    result: Any
+    exit_code: int
+
+
+class CommandResult(CommandResultProtocol):
     def __init__(self, result):
         self.result = result
-        self._exit_code = result if isinstance(result, int) else 0
+
+        match result:
+            case None:
+                self._exit_code = 0
+            case int():
+                self._exit_code = result
+            case _:
+                self._exit_code = NO_RESULT
 
     @property
     def exit_code(self) -> int:
@@ -24,7 +34,11 @@ class CommandResult:
 
     @exit_code.setter
     def exit_code(self, value: int):
-        self._exit_code = value
+        match value:
+            case int():
+                self._exit_code = value
+            case _:
+                raise ValueError("exit_code must be int")
 
     def __repr__(self):
         return f"CommandResult(result={self.result}, exit_code={self.exit_code})"
@@ -47,7 +61,9 @@ class _EventDispatch:
 
 
 class ExtendedTyper(typer.Typer):
-    event_dispatch = _EventDispatch
+    # "new is glue", as they say
+    cls_event_dispatch: Type[_EventDispatch] = _EventDispatch
+    cls_command_result: Type[CommandResultProtocol] = CommandResult
 
     @wraps(typer.Typer.__init__)
     def __init__(self, *args, **kwargs):
@@ -85,7 +101,9 @@ class ExtendedTyper(typer.Typer):
 
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):
-        event_handler = self.event_dispatch(
+        # TODO: are we working with lists now? replace or append
+        # this impacts the pop/default behavior
+        event_handler = self.cls_event_dispatch(
             kwargs.pop("event_handler", self.event_handler)
         )
         decorator = kwargs.pop("register_decorator", self.decorator)
@@ -97,7 +115,7 @@ class ExtendedTyper(typer.Typer):
                     event_handler("pre-invoke", (args_, kwargs_))
 
                 result = func(*args_, **kwargs_)
-                command_result = CommandResult(result)
+                command_result = self.cls_command_result(result)
 
                 if event_handler:
                     # TODO: think about a context object, it would include an optional return result
@@ -120,13 +138,8 @@ class ExtendedTyper(typer.Typer):
                     _func = decorator(_func)
 
                 result = _func(*args_, **kwargs_)
-
-                if result and isinstance(result, CommandResult):
+                if result.exit_code is not NO_RESULT:
                     raise typer.Exit(result.exit_code)
-                elif result and result is int:
-                    raise typer.Exit(result)
-                else:
-                    raise Exception("What is this result?")
 
             # this will get run all commands on the full ExtendedTyper app
             # so we need to filter to what we are decorating

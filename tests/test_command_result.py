@@ -1,3 +1,8 @@
+from pytest import raises
+
+from testproj.typer import NO_RESULT
+
+
 def test_command_result():
     from testproj.typer import CommandResult
 
@@ -10,7 +15,7 @@ def test_command_result():
     assert result.result == 5
 
     result = CommandResult("some string")
-    assert result.exit_code == 0
+    assert result.exit_code is NO_RESULT
     assert result.result == "some string"
 
     result = CommandResult(None)
@@ -22,3 +27,7 @@ def test_command_result():
     result.exit_code = 3
     assert result.exit_code == 3
     assert result.result == "another string"
+
+    result = CommandResult("Testing")
+    with raises(ValueError):
+        result.exit_code = "not int"
