@@ -49,7 +49,7 @@ def test_command_extension():
 
     def fake4(event: str, obj):
         nonlocal ran
-        logging.info("%s: %s", event, obj)
+        logger.info("%s: %s", event, obj)
         ran = True
 
     assert ran is False, "First test"
@@ -59,7 +59,7 @@ def test_command_extension():
         return -1
 
     assert ran is False, "Second test"
-    result = runner.invoke(app)
+    result = runner.invoke(app, ["--logger", 3])
 
     # logger.debug("Result: %s", result)
     assert result.exit_code == -1

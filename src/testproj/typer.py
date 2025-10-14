@@ -1,13 +1,13 @@
+import inspect
 from functools import wraps
-from logging import DEBUG, Logger
+from logging import getLogger
 from typing import cast
 
 import typer
 
 from testproj import registration
 
-logger = Logger(__name__)
-logger.setLevel(DEBUG)
+logger = getLogger(__name__)
 NO_RESULT = object()
 
 
@@ -84,8 +84,14 @@ class ExtendedTyper(typer.Typer):
             return wrapper
 
         def _decorate(func):
-            @base_decorator
+            def _temp_int(logger: int):
+                pass
+
+            temp_sig = inspect.signature(_temp_int)
+            func.__signature__ = temp_sig
+
             @wraps(func)
+            @base_decorator
             def wrapper(*args_, **kwargs_):
                 _func = extension_wrapper(func)
                 if decorator:
@@ -99,6 +105,16 @@ class ExtendedTyper(typer.Typer):
                     raise typer.Exit(result)
                 else:
                     raise Exception("What is this result?")
+
+            # this will get run all commands on the full ExtendedTyper app
+            # so we need to filter to what we are decorating
+            for cmd in self.registered_commands:
+                if cmd.callback != wrapper:
+                    logger.debug(
+                        "continuing after %s%s"
+                        % (cmd.callback.__name__, inspect.signature(cmd.callback))
+                    )
+                    continue
 
             return wrapper
 

@@ -16,7 +16,6 @@ def test_command_result():
     result = CommandResult(None)
     assert result.exit_code == 0
     assert result.result is None
-    print(result)
     assert repr(result) == "CommandResult(result=None, exit_code=0)"
 
     result = CommandResult("another string")
