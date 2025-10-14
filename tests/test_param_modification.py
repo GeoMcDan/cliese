@@ -3,6 +3,7 @@ from inspect import Parameter, Signature, signature
 from logging import Logger, getLogger
 from typing import Annotated
 
+from pytest import raises
 from typer import Option
 from typer.testing import CliRunner
 
@@ -95,6 +96,24 @@ def test_param_logger(setup_logger_extension):
         raise result.exception
 
     assert result.exit_code == 3
+
+
+def test_param_logger_fail(setup_logger_extension):
+    setup_logger_extension.register_extension("logger", logger_injection)
+
+    app = ExtendedTyper()
+
+    @app.command()
+    def func(
+        logger: Annotated[Logger, Option("--verbose", "-v", count=True)] = None,
+    ):
+        return logger
+
+    with raises(RuntimeError) as ex:
+        runner.invoke(app, "-vvv")
+
+    assert isinstance(ex.value, RuntimeError)
+    assert any(map(lambda s: "Type not yet supported" in s, ex.value.args))
 
 
 def test_change_signature():
