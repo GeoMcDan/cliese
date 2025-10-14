@@ -131,6 +131,7 @@ class ExtendedTyper(typer.Typer):
             # this will get run all commands on the full ExtendedTyper app
             # so we need to filter to what we are decorating
             isany = False
+            wrapper_command = None
             for cmd in self.registered_commands:
                 if cmd.callback != wrapper:
                     logger.debug(
@@ -139,10 +140,12 @@ class ExtendedTyper(typer.Typer):
                         inspect.signature(cmd.callback),
                     )
                     continue
+                wrapper_command = cmd.callback
                 isany = True
             else:
                 assert isany
 
+            assert wrapper is wrapper_command
             event_handler("command", (self, wrapper))
             return wrapper
 

@@ -42,7 +42,7 @@ def peek_command(event, args):
     _logger.debug("Peek:\n\tEvent: %s\n\tArgs: %s", event, args)
 
 
-def test_param_logger(setup_logger_extension):
+def test_param_extension_use(setup_logger_extension):
     setup_logger_extension.register_extension("logger", peek_command)
 
     app = ExtendedTyper()
@@ -52,7 +52,41 @@ def test_param_logger(setup_logger_extension):
     def func(
         logger: Annotated[int, Option("--verbose", "-v", count=True)] = None,
     ):
-        # _logger.debug("func command, param value: %s", logger)
+        return logger
+
+    # _logger.debug("Testing")
+    result = runner.invoke(app, "-vvv")
+    if result.exception and not isinstance(result.exception, SystemExit):
+        raise result.exception
+
+    assert result.exit_code == 3
+
+
+def logger_injection(event, args):
+    if event != "command":
+        return
+
+    (typer_obj, func) = args
+    _logger.debug("Typer obj: %s", typer_obj)
+    _logger.debug("func: %s", func)
+
+    _logger.debug("Signature: %s", signature(func))
+
+    def _simple(logger: Annotated[int, Option("--verbose", "-v", count=True)] = 0): ...
+
+    func.__signature__ = signature(_simple)
+
+
+def test_param_logger(setup_logger_extension):
+    setup_logger_extension.register_extension("logger", logger_injection)
+
+    app = ExtendedTyper()
+    app.use_extension("logger")
+
+    @app.command()
+    def func(
+        logger: Annotated[Logger, Option("--verbose", "-v", count=True)] = None,
+    ):
         return logger
 
     # _logger.debug("Testing")
@@ -69,6 +103,7 @@ def test_change_signature():
         ...
 
     def update_sig(template):
+        # decorator for wrapper
         def decorator2(func):
             def wrapper2(*args, **kwargs):
                 "second decorator"
@@ -78,6 +113,10 @@ def test_change_signature():
 
         def decorator(func):
             @wraps(func)
+            # need to test to check behavior, once wrapped
+            # where should signature update go?
+            # where should @wraps go
+            # this is the right order
             @decorator2
             def wrapper(*args, **kwargs):
                 """taoseting"""
