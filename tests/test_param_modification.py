@@ -7,14 +7,10 @@ from pytest import raises
 from typer import Option
 from typer.testing import CliRunner
 
-from testproj import registration
 from testproj.typer import ExtendedTyper
 
 runner = CliRunner()
 _logger = getLogger(__name__)
-
-# ExtendedTyper.register_extension("logger", object)
-registration.register_extension("logger", Logger)
 
 
 def test_param_baseline():
