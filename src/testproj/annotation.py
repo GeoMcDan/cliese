@@ -3,10 +3,21 @@ import typing
 from functools import reduce
 from operator import or_
 
+from typer.models import ParameterInfo
+
 
 class TyperAnnotation:
+    def find_parameter_info_arg(self):
+        if not self.annotations:
+            return
+
+        for param in self.annotations:
+            if isinstance(param, ParameterInfo):
+                yield param
+
     def __init__(self, annotation):
         # TODO: type normalization for typer compatibility? that a necessary thing?
+        self.original_annotation = annotation
 
         # unpack Annotated arguments
         match (typing.get_origin(annotation), typing.get_args(annotation)):
