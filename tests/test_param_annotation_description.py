@@ -6,16 +6,15 @@ from logging import Logger
 from typing import Annotated, Optional, Union
 
 import typer
-from click import Context, ParamType
 from pytest import raises
 from rich.console import Console
 from typer import Option
 
 # from typer.models import TyperOption
-from typer.core import TyperOption
 from typer.testing import CliRunner
 
 from testproj.annotation import TyperAnnotation
+from testproj.parser.logger import LoggerParser
 
 console = Console(file=sys.stderr)
 runner = CliRunner()
@@ -233,25 +232,25 @@ def test_logger_annotation_updates():
 
     _logger = logging.getLogger(__name__)
 
-    class LoggerParser(ParamType):
-        name = "Logger"
-
-        def convert(self, value, parameter: TyperOption, ctx: Context):
-            levels = {
-                0: logging.NOTSET,
-                1: logging.CRITICAL,
-                2: logging.ERROR,
-                3: logging.WARNING,
-                4: logging.INFO,
-                5: logging.DEBUG,
-            }
-
-            logger = logging.getLogger(ctx.command_path)
-            logger.setLevel(levels.get(value, logging.DEBUG))
-            return logger
-
     opt.click_type = LoggerParser()
 
-    result = runner.invoke(app, "-vvvvvv")
+    result = runner.invoke(app, "-vvv")
     if result.exception is not None:
         raise result.exception
+
+
+def test_logger_parser_annotation_updates():
+    """Can't use a ClickParam directly as a type"""
+    app = typer.Typer()
+
+    option = Option("--verbose", "-v", count=True)
+
+    @app.command()
+    def my_cmd(logger: Annotated[LoggerParser | None, option] = None):
+        assert logger is not None
+        return
+
+    with raises(RuntimeError) as ex:
+        runner.invoke(app, "-vvv")
+
+    assert any(map(lambda s: "Type not yet supported:" in s, ex.value.args))

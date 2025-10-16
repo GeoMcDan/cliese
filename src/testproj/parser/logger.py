@@ -2,11 +2,23 @@ import logging
 from typing import Callable
 
 import click
+from typer.core import TyperOption
 
 
 class LoggerParser(click.ParamType):
-    def convert(self, value, param, ctx):
-        return logging.Logger(name="testing", level=logging.DEBUG)
+    name = "Logger"
+
+    def convert(self, value, parameter: TyperOption, ctx: click.Context):
+        level = {
+            0: logging.ERROR,
+            1: logging.WARNING,
+            2: logging.INFO,
+            3: logging.DEBUG,
+        }.get(value, logging.DEBUG)
+
+        logger = logging.getLogger(ctx.command_path)
+        logger.setLevel(level)
+        return logger
 
 
 class VerbosityParser:
