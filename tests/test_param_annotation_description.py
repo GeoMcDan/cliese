@@ -8,6 +8,7 @@ from typing import Annotated, Optional, Union
 
 import pytest
 import typer
+from click.types import ParamType
 from pytest import raises
 from rich.console import Console
 from typer import Option
@@ -286,6 +287,7 @@ def app_runner():
     yield app_setup
 
 
+# WIP - This is a mess
 def process_params(event: str, args):
     if event != "command":
         return
@@ -306,20 +308,83 @@ def process_params(event: str, args):
                 for option in ann.find_parameter_info_arg():
                     # _logger.debug("Looping: %s", option)
                     _logger.debug("Parser: %s", typ_param)
-                    option.click_type = typ_param()
+                    # update click_type if it isn't set
+                    if (
+                        option
+                        and not hasattr(option, "click_type")
+                        or option.click_type is None
+                    ):
+                        option.click_type = typ_param()
 
 
-def test_logger_registration(registration_context: RegistrationContext):
+def test_logger_registration_no_click_type(registration_context: RegistrationContext):
     registration_context.add_param_type(Logger, LoggerParser)
     registration_context.register_handler(process_params)
     app_runner = AppSetup(ExtendedTyper())
 
     option = Option("--verbose", "-v", count=True)
 
-    @app_runner.command(name="testing")
+    @app_runner.command(name="testing1")
     def my_cmd(logger: Annotated[Logger | None, option] = None):
         assert logger is not None
         return
 
     app_runner.invoke("-vvv")
     # assert any(map(lambda s: "Type not yet supported:" in s, ex.value.args))
+
+
+def test_logger_registration_click_type_is_none(
+    registration_context: RegistrationContext,
+):
+    registration_context.add_param_type(Logger, LoggerParser)
+    registration_context.register_handler(process_params)
+    app_runner = AppSetup(ExtendedTyper())
+
+    option = Option("--verbose", "-v", count=True, click_type=None)
+
+    @app_runner.command(name="testing1")
+    def my_cmd(logger: Annotated[Logger | None, option] = None):
+        assert logger is not None
+        return
+
+    app_runner.invoke("-vvv")
+    # assert any(map(lambda s: "Type not yet supported:" in s, ex.value.args))
+
+
+_logger_sentinel = logging.Logger("sentinel", logging.INFO)
+
+
+class FakeClickType(ParamType):
+    def convert(self, obj, parameter, ctx):
+        return _logger_sentinel
+
+
+def test_logger_registration_click_type_exists(
+    registration_context: RegistrationContext,
+):
+    registration_context.add_param_type(Logger, LoggerParser)
+    registration_context.register_handler(process_params)
+    app_runner = AppSetup(ExtendedTyper())
+
+    option = Option("--verbose", "-v", count=True, click_type=FakeClickType())
+
+    @app_runner.command(name="testing")
+    def my_cmd(logger: Annotated[Logger | None, option] = None):
+        assert logger is _logger_sentinel
+
+    app_runner.invoke("-vvv")
+
+
+def test_logger_registration_none_annotation(registration_context: RegistrationContext):
+    registration_context.add_param_type(Logger, LoggerParser)
+    registration_context.register_handler(process_params)
+    app_runner = AppSetup(ExtendedTyper())
+
+    # option = Option("--verbose", "-v", count=True, click_type = FakeClickType())
+
+    @app_runner.command(name="testing")
+    def my_cmd(logger: Annotated[Logger | None, None] = None):
+        assert logger is not None
+        assert logger.name == "my-cmd"
+
+    app_runner.invoke("-vvv")
