@@ -4,7 +4,7 @@ import testproj.registration as registration
 
 
 @pytest.fixture
-def setup_logger_extension():
+def registration_context():
     with registration.registration_context() as ctx:
         yield ctx
 

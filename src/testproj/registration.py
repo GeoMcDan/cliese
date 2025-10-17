@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Callable
 
+from click import ParamType
+
 HookSpec = Callable[[str, object], None]
 
 
@@ -14,6 +16,7 @@ class RegistrationContext:
     extensions: MappingProxyType[str, list[object]] = field(
         default_factory=lambda: defaultdict(list), kw_only=True
     )
+    param_types: MappingProxyType[Any, Any] = field(default_factory=dict, kw_only=True)
 
     def register_decorator(self, decorator):
         self.decorator = decorator
@@ -24,9 +27,23 @@ class RegistrationContext:
     def register_extension(self, ext_key: str, ext: object):
         self.extensions[ext_key].append(ext)
 
+    def add_param_type(self, param: Any, parser: ParamType):
+        if not parser:
+            raise ValueError("parser must be not be None")
+
+        if param in self.param_types:
+            raise ValueError(f"A parser has already been registered for {param!r}")
+
+        self.param_types[param] = parser
+
 
 # TODO: consider thread local storage if we ever go multi-threaded
 _global_context = RegistrationContext()
+
+
+def add_param_type(param: Any, parser: ParamType):
+    global _global_context
+    _global_context.add_param_type(param, parser)
 
 
 def register_extension(ext_key: str, ext: object):

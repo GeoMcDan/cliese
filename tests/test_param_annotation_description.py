@@ -2,9 +2,11 @@ import inspect
 import logging
 import sys
 import typing
+from inspect import signature
 from logging import Logger
 from typing import Annotated, Optional, Union
 
+import pytest
 import typer
 from pytest import raises
 from rich.console import Console
@@ -15,7 +17,10 @@ from typer.testing import CliRunner
 
 from testproj.annotation import TyperAnnotation
 from testproj.parser.logger import LoggerParser
+from testproj.registration import RegistrationContext
+from testproj.typer import ExtendedTyper
 
+_logger = logging.getLogger(__name__)
 console = Console(file=sys.stderr)
 runner = CliRunner()
 
@@ -254,3 +259,67 @@ def test_logger_parser_annotation_updates():
         runner.invoke(app, "-vvv")
 
     assert any(map(lambda s: "Type not yet supported:" in s, ex.value.args))
+
+
+class AppSetup:
+    def __init__(self, app: typer.Typer):
+        self.app = app
+
+    def use_context(self, context: RegistrationContext):
+        self.app.use_context = context
+
+    @property
+    def command(self):
+        return self.app.command
+
+    def invoke(self, *args, raise_ex=True):
+        result = runner.invoke(self.app, *args)
+        if raise_ex and result.exception:
+            raise result.exception
+        return result
+
+
+@pytest.fixture
+def app_runner():
+    app = ExtendedTyper()
+    app_setup = AppSetup(app)
+    yield app_setup
+
+
+def process_params(event: str, args):
+    if event != "command":
+        return
+
+    app, func = args
+
+    # print(app.reg_context)
+    for typ, typ_param in app.reg_context.param_types.items():
+        # _logger.debug("Looping: %s", (typ, typ_param))
+        sig = signature(func)
+        for param in sig.parameters.values():
+            # _logger.debug("Logging: %s", param)
+            ann = TyperAnnotation(param.annotation)
+            # _logger.debug("Param Annotation: %s", ann)
+            _logger.debug("Type: %s", ann.type)
+            if ann.type is typ:
+                _logger.debug("Is Logger!")
+                for option in ann.find_parameter_info_arg():
+                    # _logger.debug("Looping: %s", option)
+                    _logger.debug("Parser: %s", typ_param)
+                    option.click_type = typ_param()
+
+
+def test_logger_registration(registration_context: RegistrationContext):
+    registration_context.add_param_type(Logger, LoggerParser)
+    registration_context.register_handler(process_params)
+    app_runner = AppSetup(ExtendedTyper())
+
+    option = Option("--verbose", "-v", count=True)
+
+    @app_runner.command(name="testing")
+    def my_cmd(logger: Annotated[Logger | None, option] = None):
+        assert logger is not None
+        return
+
+    app_runner.invoke("-vvv")
+    # assert any(map(lambda s: "Type not yet supported:" in s, ex.value.args))

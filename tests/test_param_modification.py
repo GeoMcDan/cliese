@@ -39,8 +39,8 @@ def peek_command(event, args):
     _logger.debug("Peek:\n\tEvent: %s\n\tArgs: %s", event, args)
 
 
-def test_param_extension_use(setup_logger_extension):
-    setup_logger_extension.register_extension("logger", peek_command)
+def test_param_extension_use(registration_context):
+    registration_context.register_extension("logger", peek_command)
 
     app = ExtendedTyper()
     app.use_extension("logger")
@@ -74,8 +74,8 @@ def logger_injection(event, args):
     func.__signature__ = signature(_simple)
 
 
-def test_param_logger(setup_logger_extension):
-    setup_logger_extension.register_extension("logger", logger_injection)
+def test_param_logger(registration_context):
+    registration_context.register_extension("logger", logger_injection)
 
     app = ExtendedTyper()
     app.use_extension("logger")
@@ -94,8 +94,8 @@ def test_param_logger(setup_logger_extension):
     assert result.exit_code == 3
 
 
-def test_param_logger_fail(setup_logger_extension):
-    setup_logger_extension.register_extension("logger", logger_injection)
+def test_param_logger_fail(registration_context):
+    registration_context.register_extension("logger", logger_injection)
 
     app = ExtendedTyper()
 

@@ -1,11 +1,12 @@
 import inspect
 from functools import wraps
 from logging import getLogger
-from typing import Any, Iterable, Protocol, Type, cast
+from typing import Any, Iterable, Protocol, Type
 
 import typer
 
 from testproj import registration
+from testproj.registration import RegistrationContext
 
 logger = getLogger(__name__)
 NO_RESULT = object()
@@ -60,6 +61,10 @@ class _EventDispatch:
             handler(*args, **kwargs)
 
 
+def _reg_context():
+    return registration._global_context
+
+
 class ExtendedTyper(typer.Typer):
     # "new is glue", as they say
     cls_event_dispatch: Type[_EventDispatch] = _EventDispatch
@@ -67,26 +72,33 @@ class ExtendedTyper(typer.Typer):
 
     @wraps(typer.Typer.__init__)
     def __init__(self, *args, **kwargs):
-        event_handler = kwargs.pop(
-            "event_handler", self.__class__.get_registration_func()
+        reg_context = _reg_context()
+        self.registration_context = (
+            kwargs.pop("registration_context", None) or reg_context
         )
-        decorator = kwargs.pop("decorate", self.__class__.get_decorator())
-        self.event_handler = cast(registration.HookSpec, event_handler)
-        self.decorator = decorator
-        self.extension = kwargs.pop("extension", self.__class__.get_extension())
+        self.event_handler = (
+            kwargs.pop("event_handler", None) or reg_context.event_handler
+        )
+        self.decorator = kwargs.pop("decorate", None) or reg_context.decorator
+        self.extension = kwargs.pop("extension", None) or reg_context.extensions
+
         super().__init__(*args, **kwargs)
 
     @classmethod
     def get_registration_func(cls) -> registration.HookSpec:
-        return registration._global_context.event_handler
+        return _reg_context().event_handler
 
     @classmethod
     def get_decorator(cls):
-        return registration._global_context.decorator
+        return _reg_context().decorator
 
     @classmethod
     def get_extension(cls):
-        return registration._global_context.extensions
+        return _reg_context().extensions
+
+    @property
+    def reg_context(self):
+        return self.registration_context
 
     def register(self, event_handler: registration.HookSpec, /):
         self.event_handler = event_handler
@@ -94,10 +106,13 @@ class ExtendedTyper(typer.Typer):
     def register_decorator(self, decorator):
         self.decorator = decorator
 
+    def use_context(self, registration_context: RegistrationContext):
+        self.registration_context = registration_context
+
     def use_extension(self, key: str):
-        if key not in registration._global_context.extensions:
+        if key not in self.registration_context.extensions:
             raise KeyError(f"No extension registered for key: {key}")
-        self.event_handler = registration._global_context.extensions[key]
+        self.event_handler = self.registration_context.extensions[key]
 
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):

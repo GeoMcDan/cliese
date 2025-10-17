@@ -1,12 +1,20 @@
 import types
 import typing
+from dataclasses import dataclass
 from functools import reduce
 from operator import or_
+from typing import Any, Type
 
 from typer.models import ParameterInfo
 
 
+@dataclass(init=False)
 class TyperAnnotation:
+    annotated: bool
+    type: Type
+    annotations: Any
+    optional: bool
+
     def find_parameter_info_arg(self):
         if not self.annotations:
             return

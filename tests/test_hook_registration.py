@@ -168,8 +168,8 @@ def test_command_decorator_global_setter():
         assert int(result.exit_code) == -1
 
 
-def test_register_and_use(setup_logger_extension):
-    setup_logger_extension.register_extension("logger", mock.sentinel.Logger)
+def test_register_and_use(registration_context):
+    registration_context.register_extension("logger", mock.sentinel.Logger)
     app = ExtendedTyper()
 
     with pytest.raises(KeyError):
