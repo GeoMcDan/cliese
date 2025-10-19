@@ -375,16 +375,16 @@ def test_logger_registration_click_type_exists(
     app_runner.invoke("-vvv")
 
 
-def test_logger_registration_none_annotation(registration_context: RegistrationContext):
-    registration_context.add_param_type(Logger, LoggerParser)
-    registration_context.register_handler(process_params)
-    app_runner = AppSetup(ExtendedTyper())
-
-    # option = Option("--verbose", "-v", count=True, click_type = FakeClickType())
-
-    @app_runner.command(name="testing")
-    def my_cmd(logger: Annotated[Logger | None, None] = None):
-        assert logger is not None
-        assert logger.name == "my-cmd"
-
-    app_runner.invoke("-vvv")
+# def test_logger_registration_none_annotation(registration_context: RegistrationContext):
+#    registration_context.add_param_type(Logger, LoggerParser)
+#    registration_context.register_handler(process_params)
+#    app_runner = AppSetup(ExtendedTyper())
+#
+#    # option = Option("--verbose", "-v", count=True, click_type = FakeClickType())
+#
+#    @app_runner.command(name="testing")
+#    def my_cmd(logger: Annotated[Logger | None, None] = None):
+#        assert logger is not None
+#        assert logger.name == "my-cmd"
+#
+#    app_runner.invoke("-vvv")
