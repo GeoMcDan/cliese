@@ -8,6 +8,8 @@ from typer.models import ParameterInfo
 
 from testproj.parser.logger import LoggerParser
 from testproj.poc import Pipeline
+from testproj.poc.pipeline import _instantiate_parser
+from testproj.poc.types import Invocation
 
 
 def test_pipeline_decorator_affects_signature():
@@ -164,3 +166,66 @@ def test_pipeline_register_param_type_custom_parser():
     assert option is not None
     assert isinstance(option.click_type, TokenParser)
     assert param.default is None
+
+
+def test_instantiate_parser_none_returns_none():
+    assert _instantiate_parser(None) is None
+
+
+def test_instantiate_parser_callable_invoked():
+    calls: list[str] = []
+
+    def factory():
+        calls.append("called")
+        return {"parser": True}
+
+    result = _instantiate_parser(factory)
+    assert result == {"parser": True}
+    assert calls == ["called"]
+
+
+def test_pipeline_set_invocation_factory_replaces_invocation():
+    pipeline = Pipeline()
+    created: list[Invocation] = []
+    seen_flags: list[str] = []
+
+    def factory(
+        *,
+        app,
+        original,
+        target,
+        args,
+        kwargs,
+        name=None,
+        state=None,
+    ) -> Invocation:
+        inv = Invocation(
+            app=app,
+            original=original,
+            target=target,
+            args=args,
+            kwargs=kwargs,
+            name=name,
+            state=state or {},
+        )
+        inv.state["factory"] = "custom"
+        created.append(inv)
+        return inv
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            seen_flags.append(inv.state.get("factory"))
+            return next_handler(inv)
+
+        return handler
+
+    pipeline.set_invocation_factory(factory)
+    pipeline.use(capture)
+
+    def user():
+        return "ok"
+
+    wrapped = pipeline.build(user)
+    assert wrapped() == "ok"
+    assert created and created[0].state["factory"] == "custom"
+    assert seen_flags == ["custom"]

@@ -13,6 +13,7 @@ from .types import (
     CommandHandler,
     Decorator,
     Invocation,
+    InvocationFactory,
     Middleware,
     ensure_signature,
 )
@@ -99,6 +100,27 @@ def _default_logger_option(_: inspect.Parameter) -> ParameterInfo:
     )
 
 
+def _default_invocation_factory(
+    *,
+    app: Any,
+    original: Callable[..., Any],
+    target: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    name: str | None = None,
+    state: dict[str, Any] | None = None,
+) -> Invocation:
+    return Invocation(
+        app=app,
+        original=original,
+        target=target,
+        args=args,
+        kwargs=kwargs,
+        name=name,
+        state=state or {},
+    )
+
+
 class Pipeline:
     """
     A Pythonic command middleware pipeline inspired by Flask/FastAPI ergonomics.
@@ -113,10 +135,14 @@ class Pipeline:
         *,
         decorators: Iterable[Decorator] | None = None,
         middlewares: Iterable[Middleware] | None = None,
+        invocation_factory: InvocationFactory | None = None,
     ):
         self._decorators: list[Decorator] = list(decorators or [])
         self._middlewares: list[Middleware] = list(middlewares or [])
         self._param_hooks: list[Decorator] = []
+        self._invocation_factory: InvocationFactory = (
+            invocation_factory or _default_invocation_factory
+        )
 
     # Registration helpers
     def use(self, middleware: Middleware) -> "Pipeline":
@@ -132,6 +158,10 @@ class Pipeline:
 
     def add_signature_transform(self, decorator: Decorator) -> "Pipeline":
         return self.use_decorator(decorator)
+
+    def set_invocation_factory(self, factory: InvocationFactory) -> "Pipeline":
+        self._invocation_factory = factory
+        return self
 
     def register_param_type(
         self,
@@ -193,7 +223,7 @@ class Pipeline:
         # Adapter registered with Typer; signature must match `decorated`
         @wraps(decorated)
         def adapter(*args: Any, **kwargs: Any) -> Any:
-            inv = Invocation(
+            inv = self._invocation_factory(
                 app=app,
                 original=original,
                 target=decorated,

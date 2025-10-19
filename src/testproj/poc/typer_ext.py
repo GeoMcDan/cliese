@@ -9,7 +9,13 @@ from typer.models import ParameterInfo
 
 from .pipeline import Pipeline
 from .setup import get_pipeline
-from .types import CommandHandler, Decorator, Invocation, Middleware
+from .types import (
+    CommandHandler,
+    Decorator,
+    Invocation,
+    InvocationFactory,
+    Middleware,
+)
 
 
 class ExtendedTyper(typer.Typer):
@@ -42,6 +48,11 @@ class ExtendedTyper(typer.Typer):
         """Register a decorator that reshapes command signatures."""
         self.pipeline.add_signature_transform(decorator)
         return decorator
+
+    def set_invocation_factory(self, factory: InvocationFactory) -> "ExtendedTyper":
+        """Swap the invocation factory used when commands execute."""
+        self.pipeline.set_invocation_factory(factory)
+        return self
 
     def register_param_type(
         self,

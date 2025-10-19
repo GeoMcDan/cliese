@@ -44,6 +44,23 @@ class Middleware(Protocol):
 Decorator = Callable[[Callable[..., Any]], Callable[..., Any]]
 
 
+class InvocationFactory(Protocol):
+    """Factory responsible for creating the Invocation passed through the pipeline."""
+
+    def __call__(
+        self,
+        *,
+        app: Any,
+        original: Callable[..., Any],
+        target: Callable[..., Any],
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        name: str | None = None,
+        state: dict[str, Any] | None = None,
+    ) -> Invocation:  # pragma: no cover - protocol
+        ...
+
+
 def ensure_signature(func: Callable[..., Any]) -> Callable[..., Any]:
     """Ensure the callable exposes a concrete inspect.Signature.
 

@@ -1,16 +1,26 @@
+import importlib
 import inspect
 import logging
+from typing import Annotated, get_args, get_origin
 
+import click
+import typer
+from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from testproj.poc import (
     ExtendedTyper,
     enable_logger,
     get_pipeline,
+    register_param_type,
     setup,
     use_decorator,
+    use_invocation_factory,
     use_middleware,
 )
+from testproj.poc.types import Invocation
+
+poc_setup_module = importlib.import_module("testproj.poc.setup")
 
 runner = CliRunner()
 
@@ -115,3 +125,110 @@ def test_setup_enable_logger_global_pipeline():
         raise res.exception
 
     assert captured["level"] == logging.INFO
+
+
+def _option_from_annotation(annotation):
+    if get_origin(annotation) is Annotated:
+        _, *meta = get_args(annotation)
+        for item in meta:
+            if isinstance(item, ParameterInfo):
+                return item
+    return None
+
+
+def test_get_pipeline_creates_default_when_none():
+    original = poc_setup_module._global_pipeline
+    poc_setup_module._global_pipeline = None
+    try:
+        pipeline = get_pipeline()
+        assert pipeline is poc_setup_module._global_pipeline
+    finally:
+        poc_setup_module._global_pipeline = original
+
+
+def test_use_invocation_factory_sets_global_pipeline_factory():
+    setup()
+    captured_source: list[str] = []
+    created: list[Invocation] = []
+
+    def factory(
+        *,
+        app,
+        original,
+        target,
+        args,
+        kwargs,
+        name=None,
+        state=None,
+    ) -> Invocation:
+        inv = Invocation(
+            app=app,
+            original=original,
+            target=target,
+            args=args,
+            kwargs=kwargs,
+            name=name,
+            state=state or {},
+        )
+        inv.state["source"] = "global_factory"
+        created.append(inv)
+        return inv
+
+    use_invocation_factory(factory)
+
+    pipeline = get_pipeline()
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            captured_source.append(inv.state.get("source"))
+            return next_handler(inv)
+
+        return handler
+
+    pipeline.use(capture)
+
+    def cmd():
+        return "ok"
+
+    try:
+        wrapped = pipeline.build(cmd)
+        assert wrapped() == "ok"
+        assert created and created[0].state["source"] == "global_factory"
+        assert captured_source == ["global_factory"]
+    finally:
+        setup()
+
+
+def test_setup_register_param_type_delegates_to_global_pipeline():
+    setup()
+
+    class Token(str):
+        pass
+
+    class TokenParser(click.ParamType):
+        name = "token"
+
+        def convert(self, value, parameter, ctx):
+            return Token(value.upper())
+
+    register_param_type(
+        Token,
+        option_factory=lambda param: typer.Option(
+            ..., "--token", help=f"{param.name} token"
+        ),
+        parser_factory=TokenParser,
+    )
+
+    pipeline = get_pipeline()
+
+    def cmd(token: Token | None = None):
+        return token
+
+    try:
+        wrapped = pipeline.build(cmd)
+        param = inspect.signature(wrapped).parameters["token"]
+        option = _option_from_annotation(param.annotation)
+        assert option is not None
+        assert isinstance(option.click_type, TokenParser)
+    finally:
+        setup()

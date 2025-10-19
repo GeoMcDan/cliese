@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from testproj.parser.logger import LoggerParser
 from testproj.poc import ExtendedTyper, Pipeline
+from testproj.poc.types import Invocation
 
 runner = CliRunner()
 
@@ -151,3 +152,49 @@ def test_extended_typer_register_param_type_delegates():
         raise result.exception
 
     assert captured["token"] == "cba"
+
+
+def test_extended_typer_set_invocation_factory_applies_custom_factory():
+    app = ExtendedTyper()
+    created: list[Invocation] = []
+    seen: list[str] = []
+
+    def factory(
+        *,
+        app,
+        original,
+        target,
+        args,
+        kwargs,
+        name=None,
+        state=None,
+    ) -> Invocation:
+        inv = Invocation(
+            app=app,
+            original=original,
+            target=target,
+            args=args,
+            kwargs=kwargs,
+            name=name,
+            state=state or {},
+        )
+        inv.state["flag"] = "ext"
+        created.append(inv)
+        return inv
+
+    app.set_invocation_factory(factory)
+
+    @app.after_invoke
+    def capture(inv: Invocation, result: Any):
+        seen.append(inv.state.get("flag"))
+
+    @app.command()
+    def hello():
+        return "ok"
+
+    result = runner.invoke(app)
+    if result.exception:
+        raise result.exception
+
+    assert created and created[0].state["flag"] == "ext"
+    assert seen == ["ext"]

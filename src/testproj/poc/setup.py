@@ -6,7 +6,7 @@ from typing import Any, Callable, Iterable
 from typer.models import ParameterInfo
 
 from .pipeline import Pipeline
-from .types import Decorator, Middleware
+from .types import Decorator, InvocationFactory, Middleware
 
 _global_pipeline: Pipeline | None = None
 
@@ -15,10 +15,15 @@ def setup(
     *,
     decorators: Iterable[Decorator] | None = None,
     middlewares: Iterable[Middleware] | None = None,
+    invocation_factory: InvocationFactory | None = None,
 ) -> Pipeline:
     """Create and set the global default pipeline."""
     global _global_pipeline
-    _global_pipeline = Pipeline(decorators=decorators, middlewares=middlewares)
+    _global_pipeline = Pipeline(
+        decorators=decorators,
+        middlewares=middlewares,
+        invocation_factory=invocation_factory,
+    )
     return _global_pipeline
 
 
@@ -43,6 +48,12 @@ def use_middleware(mw: Middleware) -> Pipeline:
 
 def use_decorator(dec: Decorator) -> Pipeline:
     return _mutate_pipeline(lambda pipeline: pipeline.use_decorator(dec))
+
+
+def use_invocation_factory(factory: InvocationFactory) -> Pipeline:
+    """Replace the invocation factory on the global pipeline."""
+
+    return _mutate_pipeline(lambda pipeline: pipeline.set_invocation_factory(factory))
 
 
 def register_param_type(
