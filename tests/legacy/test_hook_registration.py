@@ -4,8 +4,8 @@ from unittest import mock
 import pytest
 from typer.testing import CliRunner
 
-from testproj import registration
-from testproj.typer import ExtendedTyper
+import testproj.legacy.registration as registration
+from testproj.legacy.typer import ExtendedTyper
 
 runner = CliRunner()
 logger = logging.getLogger(__name__)

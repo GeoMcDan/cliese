@@ -1,7 +1,7 @@
 import inspect
 from typing import Any
 
-from testproj.signature.nodes import ParameterKind
+from .nodes import ParameterKind
 
 
 class SigBuilder:

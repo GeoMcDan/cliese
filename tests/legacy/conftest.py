@@ -1,15 +1,15 @@
-import os
 import sys
+from pathlib import Path
 
 import pytest
 
-import testproj.registration as registration
+import testproj.legacy.registration as registration
 
 # Ensure 'src' is on sys.path when running tests without installing the package
-_repo_root = os.path.dirname(os.path.dirname(__file__))
-_src = os.path.join(_repo_root, "src")
-if _src not in sys.path:
-    sys.path.insert(0, _src)
+_repo_root = Path(__file__).resolve().parents[2]
+_src = _repo_root / "src"
+if str(_src) not in sys.path:
+    sys.path.insert(0, str(_src))
 
 
 @pytest.fixture

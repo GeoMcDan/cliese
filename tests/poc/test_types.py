@@ -1,4 +1,4 @@
-from testproj.poc import Invocation
+from testproj import Invocation
 
 
 def test_invocation_dataclass_fields_and_state():

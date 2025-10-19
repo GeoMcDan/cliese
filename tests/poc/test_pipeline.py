@@ -7,9 +7,8 @@ from typer import Option
 from typer.models import ParameterInfo
 
 from testproj.parser.logger import LoggerParser
-from testproj.poc import Pipeline
-from testproj.poc.pipeline import _instantiate_parser
-from testproj.poc.types import Invocation
+from testproj.pipeline import Pipeline, _instantiate_parser
+from testproj.types import Invocation
 
 
 def test_pipeline_decorator_affects_signature():

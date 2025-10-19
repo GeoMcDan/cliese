@@ -1,10 +1,10 @@
 from pytest import raises
 
-from testproj.typer import NO_RESULT
+from testproj.legacy.typer import NO_RESULT
 
 
 def test_command_result():
-    from testproj.typer import CommandResult
+    from testproj.legacy.typer import CommandResult
 
     result = CommandResult(0)
     assert result.exit_code == 0

@@ -8,7 +8,7 @@ from typing import Any, Callable, Iterable
 import typer
 from typer.models import ParameterInfo
 
-from ..annotation import TyperAnnotation
+from .annotation import TyperAnnotation
 from .types import (
     CommandHandler,
     Decorator,
@@ -180,7 +180,7 @@ class Pipeline:
         option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
         parser_factory: Callable[[], Any] | type | Any | None = None,
     ) -> "Pipeline":
-        from ..parser.logger import LoggerParser
+        from .parser.logger import LoggerParser
 
         option_factory = option_factory or _default_logger_option
         parser_factory = parser_factory or LoggerParser

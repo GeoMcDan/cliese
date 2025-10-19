@@ -17,9 +17,9 @@ from typer import Option
 from typer.testing import CliRunner
 
 from testproj.annotation import TyperAnnotation
+from testproj.legacy.registration import RegistrationContext
+from testproj.legacy.typer import ExtendedTyper
 from testproj.parser.logger import LoggerParser
-from testproj.registration import RegistrationContext
-from testproj.typer import ExtendedTyper
 
 _logger = logging.getLogger(__name__)
 console = Console(file=sys.stderr)

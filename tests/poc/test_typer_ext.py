@@ -7,9 +7,9 @@ import typer
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
+from testproj import ExtendedTyper, Pipeline
 from testproj.parser.logger import LoggerParser
-from testproj.poc import ExtendedTyper, Pipeline
-from testproj.poc.types import Invocation
+from testproj.types import Invocation
 
 runner = CliRunner()
 

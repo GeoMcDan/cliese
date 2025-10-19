@@ -5,8 +5,8 @@ from typing import Any, Iterable, Protocol, Type
 
 import typer
 
-from testproj import registration
-from testproj.registration import RegistrationContext
+from . import registration
+from .registration import RegistrationContext
 
 logger = getLogger(__name__)
 NO_RESULT = object()

@@ -6,8 +6,8 @@ from typing import Callable, Iterable
 
 from typer.models import ParameterInfo
 
-from ..parser.logger import LoggerParser
 from .config import PipelineConfig
+from .parser.logger import LoggerParser
 from .pipeline import Pipeline, _default_logger_option
 from .types import Decorator, InvocationFactory, Middleware
 
