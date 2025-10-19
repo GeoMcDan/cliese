@@ -7,6 +7,8 @@ from .setup import (
     use_decorator,
     use_middleware,
 )
+from .testing import TestApp
+from .testing import runner as test_runner
 from .typer_ext import ExtendedTyper
 from .types import CommandHandler, Invocation, Middleware
 
@@ -22,4 +24,6 @@ __all__ = [
     "use_middleware",
     "enable_logger",
     "ExtendedTyper",
+    "TestApp",
+    "test_runner",
 ]

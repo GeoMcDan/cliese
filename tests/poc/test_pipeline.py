@@ -2,6 +2,7 @@ import inspect
 import logging
 from typing import Annotated, get_args, get_origin
 
+import click
 from typer import Option
 from typer.models import ParameterInfo
 
@@ -131,3 +132,35 @@ def test_pipeline_enable_logger_updates_existing_option():
 
     assert extracted is option
     assert isinstance(option.click_type, LoggerParser)
+
+
+def test_pipeline_register_param_type_custom_parser():
+    class Token(str):
+        pass
+
+    class TokenParser(click.ParamType):
+        name = "token"
+
+        def convert(self, value, parameter, ctx):
+            return Token(value.upper())
+
+    def option_factory(param: inspect.Parameter) -> ParameterInfo:
+        return Option(..., "--token", "-t", help=f"{param.name} token")
+
+    pipeline = Pipeline().register_param_type(
+        Token,
+        option_factory=option_factory,
+        parser_factory=TokenParser,
+    )
+
+    def user(token: Token | None = None):
+        return token
+
+    wrapped = pipeline.build(user)
+    sig = inspect.signature(wrapped)
+    param = sig.parameters["token"]
+    option = _option_from_annotation(param.annotation)
+
+    assert option is not None
+    assert isinstance(option.click_type, TokenParser)
+    assert param.default is None

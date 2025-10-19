@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import inspect
 import logging
-import types
-import typing
 from functools import wraps
-from typing import Annotated, Any, Callable, Iterable, Optional
+from typing import Any, Callable, Iterable
 
 import typer
 from typer.models import ParameterInfo
 
+from ..annotation import TyperAnnotation
 from .types import (
     CommandHandler,
     Decorator,
@@ -17,71 +16,6 @@ from .types import (
     Middleware,
     ensure_signature,
 )
-
-
-def _split_optional(annotation: Any) -> tuple[Any, bool]:
-    """Return (inner_type, was_optional) for Optional/Union[None] annotations."""
-
-    origin = typing.get_origin(annotation)
-    args = typing.get_args(annotation)
-
-    if origin is None and isinstance(annotation, types.UnionType):
-        args = annotation.__args__
-        origin = types.UnionType
-
-    if origin in (typing.Union, types.UnionType):
-        non_none = [arg for arg in args if arg is not type(None)]  # noqa: E721 - sentinel
-        if len(non_none) == 1 and len(non_none) != len(args):
-            return non_none[0], True
-
-    if origin is Optional:
-        return args[0], True
-
-    return annotation, False
-
-
-class _AnnotationView:
-    """Inspect and rebuild typing.Annotated signatures."""
-
-    def __init__(self, annotation: Any):
-        self.original = annotation
-        self.metadata: tuple[Any, ...] = ()
-        self.option: ParameterInfo | None = None
-        self.optional = False
-        self.inner: Any = annotation
-
-        if annotation is inspect.Signature.empty:
-            return
-
-        origin = typing.get_origin(annotation)
-        if origin is Annotated:
-            inner, *meta = typing.get_args(annotation)
-            self.inner = inner
-            self.metadata = tuple(meta)
-        else:
-            self.inner = annotation
-
-        self.inner, self.optional = _split_optional(self.inner)
-
-        for meta in self.metadata:
-            if isinstance(meta, ParameterInfo):
-                self.option = meta
-                break
-
-    @property
-    def other_metadata(self) -> tuple[Any, ...]:
-        return tuple(
-            meta for meta in self.metadata if not isinstance(meta, ParameterInfo)
-        )
-
-    def build(self, inner: Any, metadata: Iterable[Any]) -> Any:
-        annotation = inner
-        if self.optional:
-            annotation = Optional[annotation]
-        metadata = tuple(metadata)
-        if metadata:
-            return Annotated[annotation, *metadata]
-        return annotation
 
 
 def _instantiate_parser(factory: Callable[[], Any] | type | Any | None) -> Any:
@@ -99,28 +33,30 @@ def _create_param_type_hook(
     option_factory: Callable[[inspect.Parameter], ParameterInfo] | None,
     parser_factory: Callable[[], Any] | type | Any | None,
 ) -> Decorator:
+    """Return a decorator that amends matching parameters with Option metadata."""
+
     def ensure(func: Callable[..., Any]) -> Callable[..., Any]:
         sig = inspect.signature(func)
         params = []
         touched = False
 
         for param in sig.parameters.values():
-            view = _AnnotationView(param.annotation)
-            inner = view.inner
+            annot = TyperAnnotation(param.annotation)
+            target_type = annot.type
 
-            # Skip parameters without matching annotation
-            target_match = False
-            if isinstance(inner, type) and issubclass(inner, param_type):
-                target_match = True
-            elif inner is param_type:
-                target_match = True
+            match = False
+            if target_type is param_type:
+                match = True
+            elif isinstance(target_type, type) and isinstance(param_type, type):
+                match = issubclass(target_type, param_type)
 
-            if not target_match:
+            if not match:
                 params.append(param)
                 continue
 
-            option = view.option
-            metadata = list(view.other_metadata)
+            option = next(annot.find_parameter_info_arg(), None)
+            metadata = list(annot.metadata_without_parameter_info())
+
             if option is None:
                 if option_factory is None:
                     raise ValueError(
@@ -136,7 +72,7 @@ def _create_param_type_hook(
             ):
                 option.click_type = _instantiate_parser(parser_factory)
 
-            new_annotation = view.build(inner, metadata)
+            new_annotation = annot.rebuild(annotations=metadata)
             default = param.default
             if default is inspect.Signature.empty:
                 default = None

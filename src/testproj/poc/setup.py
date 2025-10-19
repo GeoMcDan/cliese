@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from typer.models import ParameterInfo
 
@@ -30,16 +30,19 @@ def get_pipeline() -> Pipeline:
     return _global_pipeline
 
 
+def _mutate_pipeline(action: Callable[[Pipeline], Any]) -> Pipeline:
+    """Helper to coordinate global pipeline mutations for wrapper helpers."""
+    pipeline = get_pipeline()
+    action(pipeline)
+    return pipeline
+
+
 def use_middleware(mw: Middleware) -> Pipeline:
-    p = get_pipeline()
-    p.use(mw)
-    return p
+    return _mutate_pipeline(lambda pipeline: pipeline.use(mw))
 
 
 def use_decorator(dec: Decorator) -> Pipeline:
-    p = get_pipeline()
-    p.use_decorator(dec)
-    return p
+    return _mutate_pipeline(lambda pipeline: pipeline.use_decorator(dec))
 
 
 def register_param_type(
@@ -50,13 +53,13 @@ def register_param_type(
 ) -> Pipeline:
     """Register a custom parameter type on the global pipeline."""
 
-    p = get_pipeline()
-    p.register_param_type(
-        param_type,
-        option_factory=option_factory,
-        parser_factory=parser_factory,
+    return _mutate_pipeline(
+        lambda pipeline: pipeline.register_param_type(
+            param_type,
+            option_factory=option_factory,
+            parser_factory=parser_factory,
+        )
     )
-    return p
 
 
 def enable_logger(
@@ -66,6 +69,9 @@ def enable_logger(
 ) -> Pipeline:
     """Convenience wrapper to enable Logger injection globally."""
 
-    p = get_pipeline()
-    p.enable_logger(option_factory=option_factory, parser_factory=parser_factory)
-    return p
+    return _mutate_pipeline(
+        lambda pipeline: pipeline.enable_logger(
+            option_factory=option_factory,
+            parser_factory=parser_factory,
+        )
+    )

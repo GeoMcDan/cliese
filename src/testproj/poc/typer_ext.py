@@ -34,10 +34,12 @@ class ExtendedTyper(typer.Typer):
 
     # Pythonic helpers -------------------------------------------------
     def add_middleware(self, middleware: Middleware) -> Middleware:
+        """Attach invoke-time middleware to the underlying pipeline."""
         self.pipeline.add_middleware(middleware)
         return middleware
 
     def add_signature_transform(self, decorator: Decorator) -> Decorator:
+        """Register a decorator that reshapes command signatures."""
         self.pipeline.add_signature_transform(decorator)
         return decorator
 
@@ -48,6 +50,7 @@ class ExtendedTyper(typer.Typer):
         option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
         parser_factory: Callable[[], object] | type | object | None = None,
     ) -> "ExtendedTyper":
+        """Expose Pipeline.register_param_type via the Typer facade."""
         self.pipeline.register_param_type(
             param_type,
             option_factory=option_factory,
@@ -61,6 +64,7 @@ class ExtendedTyper(typer.Typer):
         option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
         parser_factory: Callable[[], object] | type | object | None = None,
     ) -> "ExtendedTyper":
+        """Enable Logger injection for this app's pipeline."""
         self.pipeline.enable_logger(
             option_factory=option_factory,
             parser_factory=parser_factory,
@@ -70,6 +74,8 @@ class ExtendedTyper(typer.Typer):
     def before_invoke(
         self, func: Callable[[Invocation], Any]
     ) -> Callable[[Invocation], Any]:
+        """Register a callable that runs before each command invocation."""
+
         def middleware(next_handler: CommandHandler) -> CommandHandler:
             def handler(inv: Invocation) -> Any:
                 func(inv)
@@ -83,6 +89,8 @@ class ExtendedTyper(typer.Typer):
     def after_invoke(
         self, func: Callable[[Invocation, Any], Any]
     ) -> Callable[[Invocation, Any], Any]:
+        """Register a callable that runs after each command invocation."""
+
         def middleware(next_handler: CommandHandler) -> CommandHandler:
             def handler(inv: Invocation) -> Any:
                 result = next_handler(inv)

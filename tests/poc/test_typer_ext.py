@@ -2,6 +2,8 @@ import inspect
 import logging
 from typing import Annotated, Any, get_args, get_origin
 
+import click
+import typer
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
@@ -114,3 +116,38 @@ def test_extended_typer_before_after_invoke_helpers():
         raise result.exception
 
     assert order == ["before", "body", "after"]
+
+
+def test_extended_typer_register_param_type_delegates():
+    class Token(str):
+        pass
+
+    class TokenParser(click.ParamType):
+        name = "token"
+
+        def convert(self, value, parameter, ctx):
+            return Token(value[::-1])
+
+    app = ExtendedTyper()
+    app.register_param_type(
+        Token,
+        option_factory=lambda param: typer.Option(..., "--token"),
+        parser_factory=TokenParser,
+    )
+
+    captured = {}
+
+    @app.command()
+    def hello(token: Token | None = None):
+        captured["token"] = token
+
+    command = app.registered_commands[0]
+    sig = inspect.signature(command.callback)
+    option = _option_from_annotation(sig.parameters["token"].annotation)
+    assert isinstance(option.click_type, TokenParser)
+
+    result = runner.invoke(app, ["--token", "abc"])
+    if result.exception:
+        raise result.exception
+
+    assert captured["token"] == "cba"
