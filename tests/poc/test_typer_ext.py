@@ -1,5 +1,6 @@
 import inspect
 import logging
+from functools import wraps
 from typing import Annotated, Any, get_args, get_origin
 
 import click
@@ -158,24 +159,22 @@ def test_extended_typer_set_invocation_factory_applies_custom_factory():
     app = ExtendedTyper()
     created: list[Invocation] = []
     seen: list[str] = []
+    contexts: list[Any] = []
 
     def factory(
         *,
-        app,
         original,
         target,
-        args,
-        kwargs,
-        name=None,
         state=None,
+        environment,
+        call,
     ) -> Invocation:
+        contexts.append(environment.context)
         inv = Invocation(
-            app=app,
             original=original,
             target=target,
-            args=args,
-            kwargs=kwargs,
-            name=name,
+            environment=environment,
+            call=call,
             state=state or {},
         )
         inv.state["flag"] = "ext"
@@ -198,3 +197,54 @@ def test_extended_typer_set_invocation_factory_applies_custom_factory():
 
     assert created and created[0].state["flag"] == "ext"
     assert seen == ["ext"]
+    assert contexts and contexts[0] is not None
+
+
+def test_extended_typer_integration_provides_typer_context():
+    decorator_contexts: list[click.Context] = []
+    middleware_contexts: list[click.Context] = []
+    invocation_contexts: list[click.Context] = []
+    invoked: list[bool] = []
+
+    def context_decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            ctx = click.get_current_context()
+            assert ctx is not None
+            assert isinstance(ctx, click.Context)
+            decorator_contexts.append(ctx)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    def context_middleware(next_handler):
+        def handler(inv: Invocation):
+            ctx = inv.context
+            assert ctx is not None
+            assert isinstance(ctx, click.Context)
+            assert ctx is inv.environment.context
+            middleware_contexts.append(ctx)
+            return next_handler(inv)
+
+        return handler
+
+    pipeline = Pipeline().use_decorator(context_decorator).use(context_middleware)
+    app = ExtendedTyper(pipeline=pipeline)
+    app.inject_context()
+
+    @app.command()
+    def hello():
+        ctx = click.get_current_context()
+        assert ctx is not None
+        assert isinstance(ctx, click.Context)
+        invocation_contexts.append(ctx)
+        invoked.append(True)
+        return "done"
+
+    result = runner.invoke(app)
+    if result.exception:
+        raise result.exception
+
+    assert invoked == [True]
+    assert decorator_contexts and middleware_contexts and invocation_contexts
+    assert decorator_contexts[0] is middleware_contexts[0] is invocation_contexts[0]

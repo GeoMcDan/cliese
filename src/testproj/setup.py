@@ -77,6 +77,12 @@ def use_decorator(dec: Decorator) -> Pipeline:
     return _mutate_config(lambda cfg: cfg.add_decorator(dec))
 
 
+def inject_context() -> Pipeline:
+    """Ensure the global pipeline injects Typer Context into commands."""
+
+    return _mutate_config(lambda cfg: cfg.inject_context())
+
+
 def use_invocation_factory(factory: InvocationFactory | None) -> Pipeline:
     """Replace the invocation factory on the global pipeline."""
 

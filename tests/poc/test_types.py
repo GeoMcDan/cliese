@@ -1,4 +1,5 @@
 from testproj import Invocation
+from testproj.types import InvocationCall, InvocationEnvironment
 
 
 def test_invocation_dataclass_fields_and_state():
@@ -6,13 +7,13 @@ def test_invocation_dataclass_fields_and_state():
     # Invocation is the context object the pipeline passes through middlewares
     # and into the base handler. It carries metadata and a shared, mutable
     # state dict that middlewares can read/write.
+    environment = InvocationEnvironment(app=None, name="cmd", context=None)
+    call = InvocationCall(args=(1, 2), kwargs={"a": 3})
     inv = Invocation(
-        app=None,
         original=lambda: None,
         target=lambda: None,
-        args=(1, 2),
-        kwargs={"a": 3},
-        name="cmd",
+        environment=environment,
+        call=call,
     )
 
     # Basic attribute passthrough

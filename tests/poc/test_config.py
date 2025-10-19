@@ -42,21 +42,17 @@ def test_pipeline_config_materialises_pipeline_with_components():
 
     def factory(
         *,
-        app,
         original,
         target,
-        args,
-        kwargs,
-        name=None,
         state=None,
+        environment,
+        call,
     ) -> Invocation:
         inv = Invocation(
-            app=app,
             original=original,
             target=target,
-            args=args,
-            kwargs=kwargs,
-            name=name,
+            environment=environment,
+            call=call,
             state=state or {},
         )
         inv.state["factory"] = "custom"

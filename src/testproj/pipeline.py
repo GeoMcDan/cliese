@@ -5,6 +5,7 @@ import logging
 from functools import wraps
 from typing import Any, Callable, Iterable
 
+import click
 import typer
 from typer.models import ParameterInfo
 
@@ -13,6 +14,8 @@ from .types import (
     CommandHandler,
     Decorator,
     Invocation,
+    InvocationCall,
+    InvocationEnvironment,
     InvocationFactory,
     Middleware,
     ensure_signature,
@@ -102,21 +105,17 @@ def _default_logger_option(_: inspect.Parameter) -> ParameterInfo:
 
 def _default_invocation_factory(
     *,
-    app: Any,
     original: Callable[..., Any],
     target: Callable[..., Any],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    name: str | None = None,
+    environment: InvocationEnvironment,
+    call: InvocationCall,
     state: dict[str, Any] | None = None,
 ) -> Invocation:
     return Invocation(
-        app=app,
         original=original,
         target=target,
-        args=args,
-        kwargs=kwargs,
-        name=name,
+        environment=environment,
+        call=call,
         state=state or {},
     )
 
@@ -158,6 +157,10 @@ class Pipeline:
 
     def add_signature_transform(self, decorator: Decorator) -> "Pipeline":
         return self.use_decorator(decorator)
+
+    def inject_context(self) -> "Pipeline":
+        """Ensure Typer context is injected into command signatures."""
+        return self.use_decorator(_ensure_context_parameter)
 
     def set_invocation_factory(self, factory: InvocationFactory) -> "Pipeline":
         self._invocation_factory = factory
@@ -223,13 +226,31 @@ class Pipeline:
         # Adapter registered with Typer; signature must match `decorated`
         @wraps(decorated)
         def adapter(*args: Any, **kwargs: Any) -> Any:
-            inv = self._invocation_factory(
+            context = None
+            get_context = getattr(typer, "get_current_context", None)
+            if callable(get_context):
+                try:
+                    context = get_context(silent=True)
+                except RuntimeError:
+                    context = None
+            if context is None:
+                click_get_context = getattr(click, "get_current_context", None)
+                if callable(click_get_context):
+                    try:
+                        context = click_get_context(silent=True)
+                    except RuntimeError:
+                        context = None
+            environment = InvocationEnvironment(
                 app=app,
+                name=name,
+                context=context,
+            )
+            call = InvocationCall(args=tuple(args), kwargs=dict(kwargs))
+            inv = self._invocation_factory(
                 original=original,
                 target=decorated,
-                args=args,
-                kwargs=kwargs,
-                name=name,
+                environment=environment,
+                call=call,
             )
             return handler(inv)
 
@@ -240,3 +261,34 @@ class Pipeline:
             pass
 
         return adapter
+
+
+def _looks_like_context_param(param: inspect.Parameter) -> bool:
+    if param.annotation in (typer.Context, click.Context):
+        return True
+    if param.name == "ctx" and param.annotation is inspect._empty:
+        return True
+    return False
+
+
+def _ensure_context_parameter(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Ensure a Typer/click context parameter is present in the callable signature."""
+
+    sig = inspect.signature(func)
+    if any(_looks_like_context_param(param) for param in sig.parameters.values()):
+        return func
+
+    @wraps(func)
+    def wrapper(ctx: typer.Context, *args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs)
+
+    ctx_param = inspect.Parameter(
+        "ctx",
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        annotation=typer.Context,
+    )
+    wrapper.__signature__ = sig.replace(
+        parameters=[ctx_param, *sig.parameters.values()],
+        return_annotation=sig.return_annotation,
+    )
+    return wrapper

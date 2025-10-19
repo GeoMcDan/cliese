@@ -49,6 +49,11 @@ class ExtendedTyper(typer.Typer):
         self.pipeline.add_signature_transform(decorator)
         return decorator
 
+    def inject_context(self) -> "ExtendedTyper":
+        """Ensure Typer Context is available to commands and middleware."""
+        self.pipeline.inject_context()
+        return self
+
     def set_invocation_factory(self, factory: InvocationFactory) -> "ExtendedTyper":
         """Swap the invocation factory used when commands execute."""
         self.pipeline.set_invocation_factory(factory)
@@ -115,7 +120,7 @@ class ExtendedTyper(typer.Typer):
 
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):
-        base_decorator = super().command(*args, **kwargs)
+        base_decorator = self.base_command(*args, **kwargs)
         pipeline = self.pipeline
 
         def register(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -129,3 +134,7 @@ class ExtendedTyper(typer.Typer):
             return callback
 
         return register
+
+    @wraps(typer.Typer.command)
+    def base_command(self, *args, **kwargs):
+        return super().command(*args, **kwargs)

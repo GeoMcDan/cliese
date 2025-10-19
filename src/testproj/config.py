@@ -56,6 +56,13 @@ class PipelineConfig:
 
         return replace(self, decorators=self.decorators + (decorator,))
 
+    def inject_context(self) -> "PipelineConfig":
+        """Return a new config that ensures Typer context injection."""
+
+        from .pipeline import _ensure_context_parameter
+
+        return self.add_decorator(_ensure_context_parameter)
+
     def add_decorators(self, decorators: Iterable[Decorator]) -> "PipelineConfig":
         decorators_tuple = tuple(decorators)
         if not decorators_tuple:

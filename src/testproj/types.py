@@ -1,31 +1,87 @@
 from __future__ import annotations
 
 import inspect
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Protocol
 
 # Core invocation types
 
 
 @dataclass
-class Invocation:
-    """Invocation context passed through the middleware pipeline.
+class InvocationEnvironment:
+    """Runtime context describing the invocation environment.
 
-    - app: the Typer app (or ExtendedTyper) executing the command
-    - original: the original user function
-    - target: the decorated function whose signature Typer inspects
-    - args/kwargs: parsed args from Typer
-    - state: scratch space shared across middlewares
-    - name: command name (optional)
+    - app: the Typer (or Typer-like) application instance
+    - name: command name, when known
+    - context: optional execution context (Typer/Click or custom)
     """
 
     app: Any
-    original: Callable[..., Any]
-    target: Callable[..., Any]
+    name: str | None = None
+    context: Any | None = None
+
+    def with_context(self, context: Any | None) -> "InvocationEnvironment":
+        """Return a copy updated with a different context object."""
+
+        return replace(self, context=context)
+
+
+@dataclass
+class InvocationCall:
+    """Arguments Typer resolved for the current invocation."""
+
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
-    name: str | None = None
+
+    def clone(
+        self,
+        *,
+        args: tuple[Any, ...] | None = None,
+        kwargs: dict[str, Any] | None = None,
+    ) -> "InvocationCall":
+        """Return a copy with updated positional/keyword arguments."""
+
+        new_args = args if args is not None else self.args
+        new_kwargs = kwargs.copy() if kwargs is not None else self.kwargs.copy()
+        return InvocationCall(args=new_args, kwargs=new_kwargs)
+
+
+@dataclass
+class Invocation:
+    """Invocation context passed through the middleware pipeline.
+
+    - original: the original user function supplied by the developer
+    - target: the decorated function whose signature Typer inspects
+    - environment: contextual metadata about the invocation
+    - call: positional/keyword arguments Typer resolved
+    - state: scratch space shared across middlewares
+    """
+
+    original: Callable[..., Any]
+    target: Callable[..., Any]
+    environment: InvocationEnvironment
+    call: InvocationCall
     state: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def app(self) -> Any:
+        return self.environment.app
+
+    @property
+    def name(self) -> str | None:
+        return self.environment.name
+
+    @property
+    def context(self) -> Any | None:
+        return self.environment.context
+
+    @property
+    def args(self) -> tuple[Any, ...]:
+        return self.call.args
+
+    @property
+    def kwargs(self) -> dict[str, Any]:
+        return self.call.kwargs
 
 
 class CommandHandler(Protocol):
@@ -50,12 +106,10 @@ class InvocationFactory(Protocol):
     def __call__(
         self,
         *,
-        app: Any,
         original: Callable[..., Any],
         target: Callable[..., Any],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        name: str | None = None,
+        environment: InvocationEnvironment,
+        call: InvocationCall,
         state: dict[str, Any] | None = None,
     ) -> Invocation:  # pragma: no cover - protocol
         ...
