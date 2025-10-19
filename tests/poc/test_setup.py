@@ -1,9 +1,11 @@
 import inspect
+import logging
 
 from typer.testing import CliRunner
 
 from testproj.poc import (
     ExtendedTyper,
+    enable_logger,
     get_pipeline,
     setup,
     use_decorator,
@@ -94,3 +96,22 @@ def test_setup_overwrites_global():
     res = runner.invoke(app)
     assert res.exit_code == 0
     assert events == ["pre", "post"]
+
+
+def test_setup_enable_logger_global_pipeline():
+    """Global enable_logger applies to subsequently created apps."""
+    setup()
+    enable_logger()
+
+    captured: dict[str, int] = {}
+    app = ExtendedTyper()
+
+    @app.command()
+    def cmd(logger: logging.Logger):
+        captured["level"] = logger.level
+
+    res = runner.invoke(app, ["-vv"])
+    if res.exception:
+        raise res.exception
+
+    assert captured["level"] == logging.INFO

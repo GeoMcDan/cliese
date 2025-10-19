@@ -1,5 +1,12 @@
 from .pipeline import Pipeline
-from .setup import get_pipeline, setup, use_decorator, use_middleware
+from .setup import (
+    enable_logger,
+    get_pipeline,
+    register_param_type,
+    setup,
+    use_decorator,
+    use_middleware,
+)
 from .typer_ext import ExtendedTyper
 from .types import CommandHandler, Invocation, Middleware
 
@@ -10,7 +17,9 @@ __all__ = [
     "Pipeline",
     "setup",
     "get_pipeline",
+    "register_param_type",
     "use_decorator",
     "use_middleware",
+    "enable_logger",
     "ExtendedTyper",
 ]

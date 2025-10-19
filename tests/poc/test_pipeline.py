@@ -1,5 +1,11 @@
 import inspect
+import logging
+from typing import Annotated, get_args, get_origin
 
+from typer import Option
+from typer.models import ParameterInfo
+
+from testproj.parser.logger import LoggerParser
 from testproj.poc import Pipeline
 
 
@@ -83,3 +89,45 @@ def test_pipeline_middleware_order_and_state():
     result = wrapped()
     assert result == "ok"
     assert order == ["a_pre", "b_pre", "call", "b_post", "a_post"]
+
+
+def _option_from_annotation(annotation):
+    if get_origin(annotation) is Annotated:
+        _, *meta = get_args(annotation)
+        for item in meta:
+            if isinstance(item, ParameterInfo):
+                return item
+    return None
+
+
+def test_pipeline_enable_logger_adds_option_when_missing():
+    pipeline = Pipeline().enable_logger()
+
+    def user(logger: logging.Logger | None = None):
+        return logger
+
+    wrapped = pipeline.build(user)
+    sig = inspect.signature(wrapped)
+    param = sig.parameters["logger"]
+    option = _option_from_annotation(param.annotation)
+
+    assert option is not None
+    assert isinstance(option.click_type, LoggerParser)
+    # Option default should be available for Typer to treat as optional.
+    assert getattr(option, "count", False)
+
+
+def test_pipeline_enable_logger_updates_existing_option():
+    option = Option("--log", "-l", count=True, help="Custom logger option")
+
+    def user(logger: Annotated[logging.Logger | None, option] = None):
+        return logger
+
+    pipeline = Pipeline().enable_logger()
+    wrapped = pipeline.build(user)
+    sig = inspect.signature(wrapped)
+    param = sig.parameters["logger"]
+    extracted = _option_from_annotation(param.annotation)
+
+    assert extracted is option
+    assert isinstance(option.click_type, LoggerParser)

@@ -1,7 +1,11 @@
 import inspect
+import logging
+from typing import Annotated, Any, get_args, get_origin
 
+from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
+from testproj.parser.logger import LoggerParser
 from testproj.poc import ExtendedTyper, Pipeline
 
 runner = CliRunner()
@@ -54,3 +58,59 @@ def test_extended_typer_uses_pipeline_decorator_and_middleware():
     assert "7" in res.stdout
     assert "HELLO" in res.stdout
     assert events == ["pre", "post"]
+
+
+def _option_from_annotation(annotation):
+    if get_origin(annotation) is Annotated:
+        _, *meta = get_args(annotation)
+        for item in meta:
+            if isinstance(item, ParameterInfo):
+                return item
+    return None
+
+
+def test_extended_typer_enable_logger_adds_option_and_parser():
+    captured = {}
+    app = ExtendedTyper()
+    app.enable_logger()
+
+    @app.command()
+    def hello(logger: logging.Logger):
+        captured["level"] = logger.level
+        print(logger.level)
+
+    command = app.registered_commands[0]
+    sig = inspect.signature(command.callback)
+    option = _option_from_annotation(sig.parameters["logger"].annotation)
+    assert option is not None
+    assert isinstance(option.click_type, LoggerParser)
+
+    result = runner.invoke(app, ["-vv"])
+    if result.exception:
+        raise result.exception
+
+    # LoggerParser maps -vv -> INFO
+    assert captured["level"] == logging.INFO
+
+
+def test_extended_typer_before_after_invoke_helpers():
+    order: list[str] = []
+    app = ExtendedTyper()
+
+    @app.before_invoke
+    def capture_before(inv: Any):
+        order.append("before")
+
+    @app.after_invoke
+    def capture_after(inv: Any, result: Any):
+        order.append("after")
+
+    @app.command()
+    def hello():
+        order.append("body")
+
+    result = runner.invoke(app)
+    if result.exception:
+        raise result.exception
+
+    assert order == ["before", "body", "after"]

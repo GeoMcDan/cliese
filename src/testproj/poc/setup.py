@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Iterable
+import inspect
+from typing import Callable, Iterable
+
+from typer.models import ParameterInfo
 
 from .pipeline import Pipeline
 from .types import Decorator, Middleware
@@ -36,4 +39,33 @@ def use_middleware(mw: Middleware) -> Pipeline:
 def use_decorator(dec: Decorator) -> Pipeline:
     p = get_pipeline()
     p.use_decorator(dec)
+    return p
+
+
+def register_param_type(
+    param_type: type,
+    *,
+    option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
+    parser_factory: Callable[[], object] | type | object | None = None,
+) -> Pipeline:
+    """Register a custom parameter type on the global pipeline."""
+
+    p = get_pipeline()
+    p.register_param_type(
+        param_type,
+        option_factory=option_factory,
+        parser_factory=parser_factory,
+    )
+    return p
+
+
+def enable_logger(
+    *,
+    option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
+    parser_factory: Callable[[], object] | type | object | None = None,
+) -> Pipeline:
+    """Convenience wrapper to enable Logger injection globally."""
+
+    p = get_pipeline()
+    p.enable_logger(option_factory=option_factory, parser_factory=parser_factory)
     return p

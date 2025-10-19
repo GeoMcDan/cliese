@@ -1,35 +1,27 @@
 from __future__ import annotations
 
+import inspect
 from functools import wraps
 from typing import Any, Callable
 
 import typer
+from typer.models import ParameterInfo
 
 from .pipeline import Pipeline
 from .setup import get_pipeline
+from .types import CommandHandler, Decorator, Invocation, Middleware
 
 
 class ExtendedTyper(typer.Typer):
     """
-    Typer subclass that composes a CLI middleware pipeline.
+    Typer subclass that composes a CLI middleware pipeline with Flask/FastAPI-like helpers.
 
-    This remains Pythonic for consumers while providing OWIN/ASP.NET-style
-    layering:
-      - Registration-time decorators shape the function signature seen by Typer
-      - Invoke-time middlewares wrap the function call with pre/post hooks
+    - Registration-time decorators shape the signature Typer inspects.
+    - Invoke-time middlewares provide `before_invoke` / `after_invoke` hooks.
+    - Param-type helpers (`enable_logger`, `register_param_type`) expose opinionated defaults.
 
-    Example usage:
-        import testproj.poc as x
-
-        p = x.Pipeline()
-        p.use_decorator(my_sig_decorator)
-        p.use(my_invoke_middleware)
-
-        app = x.ExtendedTyper(pipeline=p)
-
-        @app.command()
-        def my_cmd(...):
-            ...
+    Consumers can stick to ergonomic `app.enable_logger()`, `@app.before_invoke`, etc.
+    Advanced users can still pass a fully customised `Pipeline` instance.
     """
 
     def __init__(self, *args, pipeline: Pipeline | None = None, **kwargs):
@@ -39,6 +31,68 @@ class ExtendedTyper(typer.Typer):
     @property
     def pipeline(self) -> Pipeline:
         return self._pipeline or get_pipeline()
+
+    # Pythonic helpers -------------------------------------------------
+    def add_middleware(self, middleware: Middleware) -> Middleware:
+        self.pipeline.add_middleware(middleware)
+        return middleware
+
+    def add_signature_transform(self, decorator: Decorator) -> Decorator:
+        self.pipeline.add_signature_transform(decorator)
+        return decorator
+
+    def register_param_type(
+        self,
+        param_type: type,
+        *,
+        option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
+        parser_factory: Callable[[], object] | type | object | None = None,
+    ) -> "ExtendedTyper":
+        self.pipeline.register_param_type(
+            param_type,
+            option_factory=option_factory,
+            parser_factory=parser_factory,
+        )
+        return self
+
+    def enable_logger(
+        self,
+        *,
+        option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
+        parser_factory: Callable[[], object] | type | object | None = None,
+    ) -> "ExtendedTyper":
+        self.pipeline.enable_logger(
+            option_factory=option_factory,
+            parser_factory=parser_factory,
+        )
+        return self
+
+    def before_invoke(
+        self, func: Callable[[Invocation], Any]
+    ) -> Callable[[Invocation], Any]:
+        def middleware(next_handler: CommandHandler) -> CommandHandler:
+            def handler(inv: Invocation) -> Any:
+                func(inv)
+                return next_handler(inv)
+
+            return handler
+
+        self.add_middleware(middleware)
+        return func
+
+    def after_invoke(
+        self, func: Callable[[Invocation, Any], Any]
+    ) -> Callable[[Invocation, Any], Any]:
+        def middleware(next_handler: CommandHandler) -> CommandHandler:
+            def handler(inv: Invocation) -> Any:
+                result = next_handler(inv)
+                func(inv, result)
+                return result
+
+            return handler
+
+        self.add_middleware(middleware)
+        return func
 
     @wraps(typer.Typer.command)
     def command(self, *args, **kwargs):
