@@ -1,8 +1,8 @@
 import inspect
 from inspect import Signature
 
-from testproj.legacy.signature.builder import SigBuilder
-from testproj.legacy.signature.nodes import ParameterKind
+from typerplus.legacy.signature.builder import SigBuilder
+from typerplus.legacy.signature.nodes import ParameterKind
 
 
 def test_placeholder():

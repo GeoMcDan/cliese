@@ -3,13 +3,13 @@ import logging
 
 import pytest
 
-from testproj.legacy.signature.nodes import (
+from typerplus.legacy.signature.nodes import (
     SigElement,
     SigNameElement,
     SigParamGroupElement,
     SigReturnElement,
 )
-from testproj.legacy.signature.visitor import SigVisitor, SigVisitorPrint
+from typerplus.legacy.signature.visitor import SigVisitor, SigVisitorPrint
 
 logger = logging.getLogger(__name__)
 

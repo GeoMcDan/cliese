@@ -5,8 +5,8 @@ import click
 import typer
 from typer.models import ParameterInfo
 
-from testproj.config import PipelineConfig
-from testproj.types import Invocation
+from typerplus.config import PipelineConfig
+from typerplus.types import Invocation
 
 
 def _option_from_annotation(annotation):

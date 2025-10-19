@@ -16,10 +16,10 @@ from typer import Option
 # from typer.models import TyperOption
 from typer.testing import CliRunner
 
-from testproj.annotation import TyperAnnotation
-from testproj.legacy.registration import RegistrationContext
-from testproj.legacy.typer import ExtendedTyper
-from testproj.parser.logger import LoggerParser
+from typerplus.annotation import TyperAnnotation
+from typerplus.legacy.registration import RegistrationContext
+from typerplus.legacy.typer import ExtendedTyper
+from typerplus.parser.logger import LoggerParser
 
 _logger = logging.getLogger(__name__)
 console = Console(file=sys.stderr)

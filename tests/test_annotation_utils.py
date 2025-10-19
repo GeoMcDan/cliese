@@ -3,7 +3,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from testproj.annotation import TyperAnnotation
+from typerplus.annotation import TyperAnnotation
 
 
 def test_typer_annotation_parses_optional_and_metadata():

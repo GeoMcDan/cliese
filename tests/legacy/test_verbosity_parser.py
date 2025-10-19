@@ -5,8 +5,8 @@ from typing import Annotated
 import typer
 from typer.testing import CliRunner
 
-from testproj.parser import VerbosityParser
-from testproj.parser.logger import LoggerParser
+from typerplus.parser import VerbosityParser
+from typerplus.parser.logger import LoggerParser
 
 runner = CliRunner()
 _logger = logging.Logger(__name__)

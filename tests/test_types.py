@@ -1,5 +1,5 @@
-from testproj import Invocation
-from testproj.types import InvocationCall, InvocationEnvironment
+from typerplus import Invocation
+from typerplus.types import InvocationCall, InvocationEnvironment
 
 
 def test_invocation_dataclass_fields_and_state():

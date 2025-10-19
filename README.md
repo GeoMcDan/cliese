@@ -18,7 +18,7 @@
 ## Quick Start: Drop-in Typer Feel
 
 ```python
-from testproj import ExtendedTyper as Typer
+from typerplus import ExtendedTyper as Typer
 
 app = Typer()
 
@@ -37,8 +37,8 @@ if __name__ == "__main__":
 ## Pipelines, Decorators, and Middleware
 
 ```python
-from testproj import ExtendedTyper, Pipeline
-from testproj.types import Invocation
+from typerplus import ExtendedTyper, Pipeline
+from typerplus.types import Invocation
 
 def echo_signature(func):
     """Registration-time decorator: expose a --times option without touching the body."""
@@ -79,7 +79,7 @@ def greet(times: int):
 ## Logger Injection with Verbosity Counting
 
 ```python
-from testproj import ExtendedTyper
+from typerplus import ExtendedTyper
 import logging
 
 app = ExtendedTyper()
@@ -113,7 +113,7 @@ The built-in parser mirrors the behavior tested in `tests/poc/test_pipeline.py` 
 ```python
 import click
 import typer
-from testproj import ExtendedTyper
+from typerplus import ExtendedTyper
 
 class AccessToken(str):
     ...
@@ -145,8 +145,8 @@ def fetch(token: AccessToken):
 ## Middleware & Context Access
 
 ```python
-from testproj import ExtendedTyper
-from testproj.types import Invocation
+from typerplus import ExtendedTyper
+from typerplus.types import Invocation
 
 app = ExtendedTyper()
 app.inject_context()  # ensure Typer Context is injected into commands
@@ -172,13 +172,13 @@ def build(ctx):
 Prefer central configuration? Use the global helpers:
 
 ```python
-from testproj import (
+from typerplus import (
     ExtendedTyper,
     enable_logger,
     inject_context,
     use_middleware,
 )
-from testproj.types import Invocation
+from typerplus.types import Invocation
 
 def trace(next_handler):
     def handler(inv: Invocation):

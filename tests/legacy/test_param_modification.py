@@ -7,7 +7,7 @@ from pytest import raises
 from typer import Option
 from typer.testing import CliRunner
 
-from testproj.legacy.typer import ExtendedTyper
+from typerplus.legacy.typer import ExtendedTyper
 
 runner = CliRunner()
 _logger = getLogger(__name__)

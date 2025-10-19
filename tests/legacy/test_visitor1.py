@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from inspect import Parameter, Signature, signature
 
-from testproj.legacy.signature.nodes import ParameterKind
+from typerplus.legacy.signature.nodes import ParameterKind
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ import typer
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
-from testproj import (
+from typerplus import (
     ExtendedTyper,
     PipelineConfig,
     enable_logger,
@@ -21,9 +21,9 @@ from testproj import (
     use_invocation_factory,
     use_middleware,
 )
-from testproj.types import Invocation
+from typerplus.types import Invocation
 
-poc_setup_module = importlib.import_module("testproj.setup")
+poc_setup_module = importlib.import_module("typerplus.setup")
 
 runner = CliRunner()
 

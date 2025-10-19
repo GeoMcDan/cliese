@@ -6,9 +6,9 @@ import click
 from typer import Option
 from typer.models import ParameterInfo
 
-from testproj.parser.logger import LoggerParser
-from testproj.pipeline import Pipeline, _instantiate_parser
-from testproj.types import Invocation
+from typerplus.parser.logger import LoggerParser
+from typerplus.pipeline import Pipeline, _instantiate_parser
+from typerplus.types import Invocation
 
 
 def test_pipeline_decorator_affects_signature():

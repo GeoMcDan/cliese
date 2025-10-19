@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-import testproj.legacy.registration as registration
+import typerplus.legacy.registration as registration
 
 # Ensure 'src' is on sys.path when running tests without installing the package
 _repo_root = Path(__file__).resolve().parents[2]
