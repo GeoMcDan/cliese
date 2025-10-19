@@ -1,29 +1,48 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, Iterable
+import logging
+from typing import Callable, Iterable
 
 from typer.models import ParameterInfo
 
-from .pipeline import Pipeline
+from ..parser.logger import LoggerParser
+from .config import PipelineConfig
+from .pipeline import Pipeline, _default_logger_option
 from .types import Decorator, InvocationFactory, Middleware
 
 _global_pipeline: Pipeline | None = None
+_pipeline_config: PipelineConfig = PipelineConfig()
 
 
 def setup(
     *,
+    config: PipelineConfig | None = None,
     decorators: Iterable[Decorator] | None = None,
     middlewares: Iterable[Middleware] | None = None,
     invocation_factory: InvocationFactory | None = None,
 ) -> Pipeline:
     """Create and set the global default pipeline."""
-    global _global_pipeline
-    _global_pipeline = Pipeline(
-        decorators=decorators,
-        middlewares=middlewares,
-        invocation_factory=invocation_factory,
-    )
+    global _pipeline_config, _global_pipeline
+
+    if config is None:
+        config = PipelineConfig()
+        if decorators:
+            config = config.add_decorators(decorators)
+        if middlewares:
+            config = config.add_middlewares(middlewares)
+        config = config.set_invocation_factory(invocation_factory)
+    else:
+        if any(
+            value is not None for value in (decorators, middlewares, invocation_factory)
+        ):
+            raise ValueError(
+                "When providing a PipelineConfig, do not also supply decorators, "
+                "middlewares, or invocation_factory arguments."
+            )
+
+    _pipeline_config = config
+    _global_pipeline = _pipeline_config.to_pipeline()
     return _global_pipeline
 
 
@@ -31,29 +50,37 @@ def get_pipeline() -> Pipeline:
     """Get the global pipeline, creating a no-op instance if unset."""
     global _global_pipeline
     if _global_pipeline is None:
-        _global_pipeline = Pipeline()
+        _global_pipeline = _pipeline_config.to_pipeline()
     return _global_pipeline
 
 
-def _mutate_pipeline(action: Callable[[Pipeline], Any]) -> Pipeline:
-    """Helper to coordinate global pipeline mutations for wrapper helpers."""
-    pipeline = get_pipeline()
-    action(pipeline)
-    return pipeline
+def get_config() -> PipelineConfig:
+    """Return the current global pipeline configuration."""
+
+    return _pipeline_config
+
+
+def _mutate_config(mutator: Callable[[PipelineConfig], PipelineConfig]) -> Pipeline:
+    """Apply a configuration update and rebuild the global pipeline."""
+
+    global _pipeline_config, _global_pipeline
+    _pipeline_config = mutator(_pipeline_config)
+    _global_pipeline = _pipeline_config.to_pipeline()
+    return _global_pipeline
 
 
 def use_middleware(mw: Middleware) -> Pipeline:
-    return _mutate_pipeline(lambda pipeline: pipeline.use(mw))
+    return _mutate_config(lambda cfg: cfg.add_middleware(mw))
 
 
 def use_decorator(dec: Decorator) -> Pipeline:
-    return _mutate_pipeline(lambda pipeline: pipeline.use_decorator(dec))
+    return _mutate_config(lambda cfg: cfg.add_decorator(dec))
 
 
-def use_invocation_factory(factory: InvocationFactory) -> Pipeline:
+def use_invocation_factory(factory: InvocationFactory | None) -> Pipeline:
     """Replace the invocation factory on the global pipeline."""
 
-    return _mutate_pipeline(lambda pipeline: pipeline.set_invocation_factory(factory))
+    return _mutate_config(lambda cfg: cfg.set_invocation_factory(factory))
 
 
 def register_param_type(
@@ -64,8 +91,8 @@ def register_param_type(
 ) -> Pipeline:
     """Register a custom parameter type on the global pipeline."""
 
-    return _mutate_pipeline(
-        lambda pipeline: pipeline.register_param_type(
+    return _mutate_config(
+        lambda cfg: cfg.add_param_type(
             param_type,
             option_factory=option_factory,
             parser_factory=parser_factory,
@@ -80,9 +107,11 @@ def enable_logger(
 ) -> Pipeline:
     """Convenience wrapper to enable Logger injection globally."""
 
-    return _mutate_pipeline(
-        lambda pipeline: pipeline.enable_logger(
-            option_factory=option_factory,
-            parser_factory=parser_factory,
-        )
+    option_factory = option_factory or _default_logger_option
+    parser_factory = parser_factory or LoggerParser
+
+    return register_param_type(
+        logging.Logger,
+        option_factory=option_factory,
+        parser_factory=parser_factory,
     )

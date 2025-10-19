@@ -1,0 +1,129 @@
+import inspect
+from typing import Annotated, get_args, get_origin
+
+import click
+import typer
+from typer.models import ParameterInfo
+
+from testproj.poc.config import PipelineConfig
+from testproj.poc.types import Invocation
+
+
+def _option_from_annotation(annotation):
+    if get_origin(annotation) is Annotated:
+        _, *meta = get_args(annotation)
+        for item in meta:
+            if isinstance(item, ParameterInfo):
+                return item
+    return None
+
+
+def test_pipeline_config_materialises_pipeline_with_components():
+    decorator_calls: list[bool] = []
+    middleware_states: list[str] = []
+    factory_created: list[Invocation] = []
+
+    def decorator(func):
+        def template(verbose: bool = False): ...
+
+        def wrapper(verbose: bool = False):
+            decorator_calls.append(verbose)
+            return func()
+
+        wrapper.__signature__ = inspect.signature(template)
+        return wrapper
+
+    def middleware(next_handler):
+        def handler(inv: Invocation):
+            middleware_states.append(inv.state.get("factory", "missing"))
+            return next_handler(inv)
+
+        return handler
+
+    def factory(
+        *,
+        app,
+        original,
+        target,
+        args,
+        kwargs,
+        name=None,
+        state=None,
+    ) -> Invocation:
+        inv = Invocation(
+            app=app,
+            original=original,
+            target=target,
+            args=args,
+            kwargs=kwargs,
+            name=name,
+            state=state or {},
+        )
+        inv.state["factory"] = "custom"
+        factory_created.append(inv)
+        return inv
+
+    def command():
+        return "ok"
+
+    config = (
+        PipelineConfig()
+        .add_decorator(decorator)
+        .add_middleware(middleware)
+        .set_invocation_factory(factory)
+    )
+
+    pipeline = config.to_pipeline()
+    wrapped = pipeline.build(command)
+    assert wrapped(verbose=True) == "ok"
+    assert decorator_calls == [True]
+    assert middleware_states == ["custom"]
+    assert factory_created and factory_created[0].state["factory"] == "custom"
+
+
+def test_pipeline_config_add_param_type_registers_option():
+    class Token(str):
+        pass
+
+    class TokenParser(click.ParamType):
+        name = "token"
+
+        def convert(self, value, param, ctx):
+            return Token(value.upper())
+
+    config = PipelineConfig().add_param_type(
+        Token,
+        option_factory=lambda param: typer.Option(..., "--token"),
+        parser_factory=TokenParser,
+    )
+
+    def command(token: Token | None = None):
+        return token
+
+    pipeline = config.to_pipeline()
+    wrapped = pipeline.build(command)
+    option = _option_from_annotation(
+        inspect.signature(wrapped).parameters["token"].annotation
+    )
+    assert isinstance(option.click_type, TokenParser)
+    assert option.click_type.convert("abc", None, None) == "ABC"
+
+
+def test_pipeline_config_merge_allows_variant_clones():
+    def mw(next_handler):
+        def handler(inv: Invocation):
+            inv.state["mw"] = inv.state.get("mw", 0) + 1
+            return next_handler(inv)
+
+        return handler
+
+    base = PipelineConfig()
+    variant_a = base.add_middleware(mw)
+    variant_b = variant_a.add_param_type(
+        int,
+        option_factory=lambda param: typer.Option(..., "--count", type=int),
+    )
+
+    merged = base.merge(variant_b)
+    assert merged.middlewares == variant_b.middlewares
+    assert merged.param_type_hooks == variant_b.param_type_hooks

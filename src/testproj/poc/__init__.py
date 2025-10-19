@@ -1,6 +1,8 @@
+from .config import PipelineConfig
 from .pipeline import Pipeline
 from .setup import (
     enable_logger,
+    get_config,
     get_pipeline,
     register_param_type,
     setup,
@@ -18,8 +20,10 @@ __all__ = [
     "InvocationFactory",
     "CommandHandler",
     "Middleware",
+    "PipelineConfig",
     "Pipeline",
     "setup",
+    "get_config",
     "get_pipeline",
     "register_param_type",
     "use_decorator",

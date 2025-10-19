@@ -4,13 +4,16 @@ import logging
 from typing import Annotated, get_args, get_origin
 
 import click
+import pytest
 import typer
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from testproj.poc import (
     ExtendedTyper,
+    PipelineConfig,
     enable_logger,
+    get_config,
     get_pipeline,
     register_param_type,
     setup,
@@ -195,8 +198,45 @@ def test_use_invocation_factory_sets_global_pipeline_factory():
         assert wrapped() == "ok"
         assert created and created[0].state["source"] == "global_factory"
         assert captured_source == ["global_factory"]
+        assert get_config().invocation_factory is factory
     finally:
         setup()
+
+
+def test_setup_accepts_pipeline_config():
+    setup()
+
+    events: list[str] = []
+
+    def mw(next_handler):
+        def handler(inv: Invocation):
+            events.append("mw")
+            return next_handler(inv)
+
+        return handler
+
+    config = PipelineConfig().add_middleware(mw)
+
+    try:
+        setup(config=config)
+        assert get_config() is config
+
+        pipeline = get_pipeline()
+
+        def cmd():
+            return "ok"
+
+        wrapped = pipeline.build(cmd)
+        assert wrapped() == "ok"
+        assert events == ["mw"]
+    finally:
+        setup()
+
+
+def test_setup_with_config_and_args_raises():
+    config = PipelineConfig()
+    with pytest.raises(ValueError):
+        setup(config=config, decorators=[lambda f: f])
 
 
 def test_setup_register_param_type_delegates_to_global_pipeline():
