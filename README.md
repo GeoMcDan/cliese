@@ -1,4 +1,4 @@
-# Try-Visitor
+# Typer Plus 
 
 **The next evolution of Typer-style CLIs.** Try-Visitor keeps the ergonomics of `typer.Typer` while layering a composable pipeline that feels closer to FastAPI or modern web frameworks. Registration-time decorators and invoke-time middleware live side by side, letting you shape signatures, inject dependencies, and orchestrate cross-cutting concerns without contorting your command functions.
 
