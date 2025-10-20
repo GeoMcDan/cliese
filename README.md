@@ -1,21 +1,22 @@
-# Typer Plus 
+# Typer Plus
 
-**The next evolution of Typer-style CLIs.** Try-Visitor keeps the ergonomics of `typer.Typer` while layering a composable pipeline that feels closer to FastAPI or modern web frameworks. Registration-time decorators and invoke-time middleware live side by side, letting you shape signatures, inject dependencies, and orchestrate cross-cutting concerns without contorting your command functions.
+**Pipeline-powered CLIs without giving up Typer’s ergonomics.** Typer Plus (Try-Visitor) layers a FastAPI-style middleware pipeline on top of `typer.Typer` so you can shape signatures, inject dependencies, and coordinate cross-cutting behaviour while keeping command functions clean.
 
-- ⚙️ **Design intent:** treat command execution like an HTTP request—run it through a predictable pipeline that can observe and mutate state.
-- 🧩 **Composability first:** decorators amend the public signature Typer inspects; middleware wraps the actual invocation, observing shared state and Typer’s runtime context.
-- 🧠 **Context aware:** expose Typer/Click context, args/kwargs, and shared state through a single `Invocation` object so middlewares stay clean and testable.
+## Feature Highlights
 
-> _“FastAPI is to Typer what Typer is to Click.”_ Try-Visitor aims to push that analogy one step further.
+- **Composable pipeline:** registration-time decorators and invoke-time middleware run for every command, just like HTTP middleware.
+- **Signature transforms:** publish CLI options without touching the handler—ideal for toggles, feature flags, or shared options.
+- **Invocation insight:** a single `Invocation` object exposes the Typer/Click context, args, kwargs, and shared state.
+- **Custom type injection:** register your own parsers (e.g. API tokens) or rely on the built-in logger integration.
+- **Virtual options:** surface pipeline-owned options (such as `--what-if`) to Typer while keeping handlers unaware; middleware reads the values from invocation state.
+- **Flexible configuration:** use a dedicated `Pipeline`, global helpers via `typerplus.setup`, or a mix of both.
+- **100% Typer compatible:** `ExtendedTyper` is a drop-in replacement; an empty pipeline behaves exactly like Typer.
 
-### Acknowledgements
-
-- **bottor** — for the foundational ideas around middleware-style CLI composition.
-- **Sebastián Ramírez (tiangolo)** — creator of Typer & FastAPI; this project stands on his shoulders.
+> _“FastAPI is to Typer what Typer is to Click.”_ Typer Plus finishes the analogy by giving Typer a first-class middleware story.
 
 ---
 
-## Quick Start: Drop-in Typer Feel
+## Quick Start
 
 ```python
 from typerplus import ExtendedTyper as Typer
@@ -30,20 +31,20 @@ if __name__ == "__main__":
     app()
 ```
 
-`ExtendedTyper` mirrors the default Typer API, so you can alias it and ship existing commands unchanged. The real power appears when you start composing the pipeline.
+Alias `ExtendedTyper` and keep exporting commands. Until you add pipeline features, behaviour is identical to Typer.
 
 ---
 
-## Pipelines, Decorators, and Middleware
+## Core Concepts
+
+### Pipeline, Decorators, Middleware
 
 ```python
+import inspect
 from typerplus import ExtendedTyper, Pipeline
 from typerplus.types import Invocation
 
-def echo_signature(func):
-    """Registration-time decorator: expose a --times option without touching the body."""
-    import inspect
-
+def add_times_option(func):
     def template(times: int = 1): ...
 
     def wrapper(*args, **kwargs):
@@ -52,17 +53,15 @@ def echo_signature(func):
     wrapper.__signature__ = inspect.signature(template)
     return wrapper
 
-def log_invocation(next_handler):
-    """Invoke-time middleware: log before and after the command runs."""
+def trace(next_handler):
     def handler(inv: Invocation):
-        inv.state["events"] = inv.state.get("events", [])
-        inv.state["events"].append("pre")
+        inv.state.setdefault("events", []).append("pre")
         result = next_handler(inv)
         inv.state["events"].append("post")
         return result
     return handler
 
-pipeline = Pipeline().use_decorator(echo_signature).use(log_invocation)
+pipeline = Pipeline().use_decorator(add_times_option).use(trace)
 app = ExtendedTyper(pipeline=pipeline)
 
 @app.command()
@@ -71,52 +70,39 @@ def greet(times: int):
         print("Hey there!")
 ```
 
-- **Decorators** rewrite the signature Typer inspects (`--times` above) without mutating the original function.
-- **Middleware** receives an `Invocation` object with the Typer app, command name, args/kwargs, and shared `state` dict.
+- **Decorators** run at registration time and only affect the signature Typer inspects.
+- **Middleware** runs at invocation time with an `Invocation` object that exposes app, command name, args/kwargs, shared state, and Click/Typer context.
 
----
-
-## Logger Injection with Verbosity Counting
+### Invocation & Context Access
 
 ```python
 from typerplus import ExtendedTyper
-import logging
+from typerplus.types import Invocation
 
 app = ExtendedTyper()
-app.enable_logger()  # Adds -v / --verbose (counting) and a Logger parser.
+app.inject_context()  # ensures handlers can accept ctx: typer.Context
+
+@app.before_invoke
+def capture(inv: Invocation):
+    inv.state["command_path"] = inv.context.command_path if inv.context else None
 
 @app.command()
-def status(logger: logging.Logger):
-    logger.info("Informational message")
-    logger.debug("Debug noise")
+def build(ctx):
+    print("Command path:", ctx.command_path)
 ```
 
-Run it:
-
-```bash
-$ app status
-# default level (WARNING) prints nothing
-
-$ app status -v
-# now INFO messages appear
-
-$ app status -vv
-# LoggerParser bumps level to DEBUG
-```
-
-The built-in parser mirrors the behavior tested in `tests/poc/test_pipeline.py` and `tests/poc/test_typer_ext.py`, using `count=True` to map repeat flags into logger levels.
+`inject_context` prepends a `ctx` parameter when missing. Middleware and handlers can also use `inv.command_context` to interact with the same data via an ergonomic façade.
 
 ---
 
-## Custom Types & Option Metadata
+## Custom Type Injection
 
 ```python
 import click
 import typer
 from typerplus import ExtendedTyper
 
-class AccessToken(str):
-    ...
+class AccessToken(str): ...
 
 class AccessTokenParser(click.ParamType):
     name = "token"
@@ -138,69 +124,105 @@ def fetch(token: AccessToken):
     print(f"Using {token!r}")
 ```
 
-`register_param_type` wires a parser plus option metadata, reusing the same hooks the tests exercise.
+`register_param_type` adjusts the signature Typer sees and wires the converter Click expects—no manual option definitions required.
 
 ---
 
-## Middleware & Context Access
+## Logger Integration
+
+```python
+import logging
+from typerplus import ExtendedTyper
+
+app = ExtendedTyper()
+app.enable_logger()  # exposes -v/--verbose and returns a configured logging.Logger
+
+@app.command()
+def status(logger: logging.Logger):
+    logger.info("Informational message")
+    logger.debug("Debug trace")
+```
+
+- `LoggerParser` converts count-based verbosity (`-vv`) **and** textual levels (`--log-level debug`).
+- Loggers are named after `ctx.command_path`, keeping log output grouped by command.
+
+---
+
+## Virtual Options
+
+Virtual options let the pipeline surface CLI switches without forwarding them to handlers. They are ideal for middleware-driven behaviour such as dry-run or preview modes.
 
 ```python
 from typerplus import ExtendedTyper
 from typerplus.types import Invocation
 
 app = ExtendedTyper()
-app.inject_context()  # ensure Typer Context is injected into commands
+app.add_virtual_option("what_if")  # exposes --what-if to Typer
 
-@app.before_invoke
-def capture_context(inv: Invocation):
-    ctx = inv.context  # click/typer context
-    inv.state["command_path"] = ctx.command_path if ctx else None
+@app.use  # shorthand for pipeline.use(middleware)
+def capture_what_if(next_handler):
+    def handler(inv: Invocation):
+        flag = inv.state.get("virtual:what_if", False)
+        if flag:
+            print("Running in what-if mode")
+        return next_handler(inv)
+    return handler
 
 @app.command()
-def build(ctx):
-    assert ctx is inv.context  # same object surfaced to the handler
-    print("Command path:", ctx.command_path)
+def deploy(environment: str):
+    print(f"Deploying to {environment}")
 ```
 
-- `inject_context` prepends a `ctx: typer.Context` parameter to commands that don’t already specify one.
-- Middlewares (and handlers) access the context via `inv.context` without rewiring every function signature manually.
+- Typer advertises `--what-if` in `--help` and parses it normally.
+- The runtime pipeline removes `what_if` from handler kwargs and stores the value in `inv.state["virtual:what_if"]` so middleware can react.
 
 ---
 
-## Global Pipeline Configuration
+## Configuration & Setup Options
 
-Prefer central configuration? Use the global helpers:
+Prefer central configuration? Compose once, reuse everywhere:
 
 ```python
 from typerplus import (
     ExtendedTyper,
     enable_logger,
     inject_context,
+    add_virtual_option,
     use_middleware,
 )
 from typerplus.types import Invocation
 
-def trace(next_handler):
+def audit(next_handler):
     def handler(inv: Invocation):
-        print(f"→ {inv.name}")
+        print(f"-> {inv.name}")
         return next_handler(inv)
     return handler
 
 inject_context()
 enable_logger()
-use_middleware(trace)
+add_virtual_option("what_if")
+use_middleware(audit)
 
-app = ExtendedTyper()  # picks up the configured global pipeline
+app = ExtendedTyper()  # picks up the configured pipeline
 ```
 
-Any `ExtendedTyper` created after the configuration call inherits the shared decorators, middleware, and invocation factory.
+Behind the scenes a `PipelineConfig` tracks decorators, middleware, param types, virtual options, and invocation factories. You can clone or merge configurations, or create bespoke `Pipeline` instances for each app.
 
 ---
 
-## What’s Next
+## Typer Compatibility
 
-- richer context coercion helpers (Typer vs. Click contexts)
-- plug-and-play middleware catalog for logging, telemetry, retries
-- deeper integration tests and docs as the ecosystem grows
+- `ExtendedTyper` mirrors `typer.Typer` methods (`command`, `callback`, `before_invoke`, `after_invoke`, etc.).
+- A fresh `Pipeline()` (or the global default) with no additions behaves exactly like Typer.
+- Existing Typer applications can migrate incrementally: alias `ExtendedTyper`, then opt into pipeline features as needed.
 
-Feedback and contributions are welcome—this README will expand as new capabilities land. Until then, enjoy the upgraded Typer experience!
+---
+
+## Acknowledgements
+
+- **bottor** – foundational exploration of middleware-style CLI composition.
+- **Sebastián Ramírez (tiangolo)** – creator of Typer & FastAPI; this project builds on his ecosystem.
+
+---
+
+Pull requests, middleware examples, and docs improvements are welcome. Enjoy the upgraded Typer experience!
