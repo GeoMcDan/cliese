@@ -2,6 +2,7 @@
 
 from . import legacy
 from .config import PipelineConfig
+from .core import TyperPlus
 from .pipeline import Pipeline
 from .setup import (
     add_virtual_option,
@@ -17,7 +18,6 @@ from .setup import (
 )
 from .testing import TestApp
 from .testing import runner as test_runner
-from .typer_ext import TyperPlus
 from .types import (
     CommandContext,
     CommandHandler,

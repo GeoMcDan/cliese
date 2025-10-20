@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typer.testing import CliRunner
 
+from .core import TyperPlus
 from .pipeline import Pipeline
-from .typer_ext import TyperPlus
 
 __all__ = ["TestApp", "runner"]
 
