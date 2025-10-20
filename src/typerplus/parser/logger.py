@@ -1,50 +1,68 @@
 import logging
-from typing import Callable
+from typing import Any
 
 import click
-from typer.core import TyperOption
 
 
 class LoggerParser(click.ParamType):
-    name = "Logger"
+    """Convert CLI verbosity/count or textual level into a configured logger."""
 
-    def convert(self, value, parameter: TyperOption, ctx: click.Context):
-        level = {
-            0: logging.ERROR,
-            1: logging.WARNING,
-            2: logging.INFO,
-            3: logging.DEBUG,
-        }.get(value, logging.DEBUG)
+    name = "logger"
 
-        logger = logging.getLogger(ctx.command_path)
+    def convert(
+        self,
+        value: Any,
+        parameter: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> logging.Logger:
+        logger_name = (
+            ctx.command_path if ctx and ctx.command_path else None
+        ) or "typer"
+
+        try:
+            level = self._coerce_level(value)
+        except ValueError as exc:
+            self.fail(str(exc), param=parameter, ctx=ctx)
+
+        logger = logging.getLogger(logger_name)
         logger.setLevel(level)
         return logger
 
+    def _coerce_level(self, value: Any) -> int:
+        """Return a logging level derived from count or textual input."""
 
-class VerbosityParser:
+        if isinstance(value, logging.Logger):
+            return value.level
+
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                raise ValueError("log level cannot be empty")
+            if stripped.isdigit():
+                number = int(stripped)
+                if number <= 4:
+                    return self._level_from_count(number)
+                return number
+            upper = stripped.upper()
+
+            nameToLevel = logging.getLevelNamesMapping()
+            if upper in nameToLevel:
+                return nameToLevel[upper]
+            raise ValueError(f"unknown log level '{value}'")
+
+        if isinstance(value, (int, float)):
+            count = int(value)
+            return self._level_from_count(count)
+
+        raise ValueError(f"unsupported log level value {value!r}")
+
     @staticmethod
-    def default_factory(name: str, level: int | str):
-        return logging.Logger(name=name, level=level)
-
-    def __init__(self, factory: Callable[[int], logging.Logger] = default_factory):
-        self.factory = factory
-
-    def parse(self, verbosity: int):
-        match verbosity:
-            case 0:
-                log_level = logging.NOTSET
-            case 1:
-                log_level = logging.CRITICAL
-            case 2:
-                log_level = logging.ERROR
-            case 3:
-                log_level = logging.WARN
-            case 4:
-                log_level = logging.INFO
-            case _:
-                log_level = logging.DEBUG
-
-        if isinstance(self.factory, type) and issubclass(logging.Logger, self.factory):
-            return logging.Logger(level=log_level)
-        else:
-            return self.factory("testing", log_level)
+    def _level_from_count(count: int) -> int:
+        if count <= 0:
+            return logging.WARNING
+        if count == 1:
+            return logging.INFO
+        if count == 2:
+            return logging.DEBUG
+        # Treat high verbosity counts as maximum detail
+        return logging.NOTSET

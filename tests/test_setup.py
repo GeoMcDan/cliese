@@ -128,7 +128,7 @@ def test_setup_enable_logger_global_pipeline():
     if res.exception:
         raise res.exception
 
-    assert captured["level"] == logging.INFO
+    assert captured["level"] == logging.DEBUG
 
 
 def _option_from_annotation(annotation):

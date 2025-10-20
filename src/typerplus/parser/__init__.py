@@ -1,3 +1,3 @@
-from .logger import VerbosityParser
+from .logger import LoggerParser
 
-__all__ = ["VerbosityParser"]
+__all__ = ["LoggerParser"]
