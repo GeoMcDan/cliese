@@ -1,14 +1,16 @@
 import inspect
 import logging
-from typing import Annotated, get_args, get_origin
+from typing import Annotated, Any, get_args, get_origin
 
 import click
 from typer import Option
 from typer.models import ParameterInfo
+from typer.testing import CliRunner
 
+from typerplus import ExtendedTyper
 from typerplus.parser.logger import LoggerParser
 from typerplus.pipeline import Pipeline, _instantiate_parser
-from typerplus.types import Invocation
+from typerplus.types import CommandContext, Invocation, InvocationContext
 
 
 def test_pipeline_decorator_affects_signature():
@@ -224,3 +226,128 @@ def test_pipeline_set_invocation_factory_replaces_invocation():
     assert wrapped() == "ok"
     assert created and created[0].state["factory"] == "custom"
     assert seen_flags == ["custom"]
+
+
+def test_pipeline_injects_invocation_context_for_commands():
+    pipeline = Pipeline()
+
+    def seed_state(next_handler):
+        def handler(inv: Invocation):
+            inv.state["flag"] = "from-middleware"
+            return next_handler(inv)
+
+        return handler
+
+    pipeline.use(seed_state)
+    captured: dict[str, Any] = {}
+
+    def command(ctx: InvocationContext, value: int):
+        captured["type"] = type(ctx)
+        captured["value"] = value
+        captured["flag"] = ctx.state.get("flag")
+        captured["name"] = ctx.name
+        captured["args"] = ctx.args
+        captured["kwargs"] = ctx.kwargs
+        return ctx
+
+    wrapped = pipeline.build(command, name="demo")
+    sig = inspect.signature(wrapped)
+    assert list(sig.parameters) == ["value"]
+
+    ctx_obj = wrapped(5)
+    assert isinstance(ctx_obj, InvocationContext)
+    assert captured["type"] is InvocationContext
+    assert captured["value"] == 5
+    assert captured["flag"] == "from-middleware"
+    assert captured["name"] == "demo"
+    assert captured["args"] == (5,)
+    assert captured["kwargs"] == {}
+
+
+def test_pipeline_supports_command_context_alias():
+    pipeline = Pipeline()
+    seen: dict[str, Any] = {}
+
+    def command(value: int, ctx: CommandContext):
+        seen["is_instance"] = isinstance(ctx, CommandContext)
+        seen["args"] = ctx.args
+        return ctx.name
+
+    wrapped = pipeline.build(command, name="alias")
+    assert list(inspect.signature(wrapped).parameters) == ["value"]
+
+    result = wrapped(10)
+    assert result == "alias"
+    assert seen["is_instance"] is True
+    assert seen["args"] == (10,)
+
+
+def test_pipeline_extended_typer_command_receives_invocation_context():
+    pipeline = Pipeline()
+
+    def seed_state(next_handler):
+        def handler(inv: Invocation):
+            inv.state["flag"] = "from-middleware"
+            return next_handler(inv)
+
+        return handler
+
+    pipeline.use(seed_state)
+    app = ExtendedTyper(pipeline=pipeline)
+    captured: dict[str, Any] = {}
+
+    @app.command()
+    def demo(ctx: InvocationContext, value: int):
+        captured["type"] = type(ctx)
+        captured["value"] = value
+        captured["flag"] = ctx.state.get("flag")
+        captured["name"] = ctx.name
+        captured["args"] = ctx.args
+        captured["kwargs"] = ctx.kwargs
+        return "ok"
+
+    command = app.registered_commands[0]
+    sig = inspect.signature(command.callback)
+    assert list(sig.parameters) == ["value"]
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["5"])
+    if result.exception:
+        raise result.exception
+
+    assert captured["type"] is InvocationContext
+    assert captured["value"] == 5
+    assert captured["flag"] == "from-middleware"
+    assert captured["name"] == "demo"
+    assert captured["args"] == ()
+    assert captured["kwargs"] == {"value": 5}
+
+
+def test_extended_typer_command_receives_invocation_context():
+    app = ExtendedTyper()
+    captured: dict[str, Any] = {}
+
+    @app.command()
+    def demo(ctx: InvocationContext, value: int):
+        captured["type"] = type(ctx)
+        captured["value"] = value
+        captured["flag"] = ctx.state.get("flag")
+        captured["name"] = ctx.name
+        captured["args"] = ctx.args
+        captured["kwargs"] = ctx.kwargs
+        return "ok"
+
+    command = app.registered_commands[0]
+    sig = inspect.signature(command.callback)
+    assert list(sig.parameters) == ["value"]
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["5"])
+    if result.exception:
+        raise result.exception
+
+    assert captured["type"] is InvocationContext
+    assert captured["value"] == 5
+    assert captured["name"] == "demo"
+    assert captured["args"] == ()
+    assert captured["kwargs"] == {"value": 5}

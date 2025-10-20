@@ -11,10 +11,12 @@ from typer.models import ParameterInfo
 
 from .annotation import TyperAnnotation
 from .types import (
+    CommandContext,
     CommandHandler,
     Decorator,
     Invocation,
     InvocationCall,
+    InvocationContext,
     InvocationEnvironment,
     InvocationFactory,
     Middleware,
@@ -91,6 +93,55 @@ def _create_param_type_hook(
         return func
 
     return ensure
+
+
+_CONTEXT_TYPE_SENTINELS = {"InvocationContext", "CommandContext"}
+
+
+def _is_invocation_context_annotation(annotation: Any) -> bool:
+    annot = TyperAnnotation(annotation)
+    target = annot.type
+
+    if target in (InvocationContext, CommandContext):
+        return True
+
+    if isinstance(target, str) and target in _CONTEXT_TYPE_SENTINELS:
+        return True
+
+    return False
+
+
+def _ensure_invocation_context_parameter(
+    func: Callable[..., Any],
+) -> Callable[..., Any]:
+    """Hide InvocationContext parameters from Typer while tracking them for injection."""
+
+    if getattr(func, "__typerplus_context_param_names__", None):
+        return func
+
+    sig = inspect.signature(func)
+    context_params: list[inspect.Parameter] = []
+    remaining_params: list[inspect.Parameter] = []
+
+    for param in sig.parameters.values():
+        if _is_invocation_context_annotation(param.annotation):
+            context_params.append(param)
+            continue
+        remaining_params.append(param)
+
+    if not context_params:
+        return func
+
+    runtime_sig = sig.replace(parameters=remaining_params)
+    setattr(func, "__typerplus_original_signature__", sig)
+    setattr(func, "__typerplus_runtime_signature__", runtime_sig)
+    setattr(
+        func,
+        "__typerplus_context_param_names__",
+        tuple(param.name for param in context_params),
+    )
+    func.__signature__ = runtime_sig
+    return func
 
 
 def _default_logger_option(_: inspect.Parameter) -> ParameterInfo:
@@ -211,12 +262,14 @@ class Pipeline:
         for hook in self._param_hooks:
             decorated = hook(decorated)
 
+        decorated = _ensure_invocation_context_parameter(decorated)
+
         # Ensure Typer can read the final signature
         ensure_signature(decorated)
 
         # Base handler makes the actual call
         def base(inv: Invocation) -> Any:
-            return inv.target(*inv.args, **inv.kwargs)
+            return inv.invoke_target()
 
         # Compose invoke middlewares (last registered runs innermost)
         handler: CommandHandler = base

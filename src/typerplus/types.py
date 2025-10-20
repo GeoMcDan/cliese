@@ -62,6 +62,7 @@ class Invocation:
     environment: InvocationEnvironment
     call: InvocationCall
     state: dict[str, Any] = field(default_factory=dict)
+    _context: "InvocationContext | None" = field(default=None, init=False, repr=False)
 
     @property
     def app(self) -> Any:
@@ -82,6 +83,126 @@ class Invocation:
     @property
     def kwargs(self) -> dict[str, Any]:
         return self.call.kwargs
+
+    @property
+    def command_context(self) -> "InvocationContext":
+        """Return the reusable command context exposed to handlers."""
+
+        if self._context is None:
+            self._context = InvocationContext(invocation=self)
+        return self._context
+
+    # Backward compatible alias
+    ctx = command_context
+
+    def resolve_call_arguments(self) -> tuple[tuple[Any, ...], dict[str, Any]]:
+        """Return (args, kwargs) including any framework-managed injections."""
+
+        original_sig = getattr(self.target, "__typerplus_original_signature__", None)
+        context_param_names: tuple[str, ...] = getattr(
+            self.target, "__typerplus_context_param_names__", ()
+        )
+
+        exec_sig = original_sig or inspect.signature(self.target)
+        context_names_set = set(context_param_names)
+
+        args_list = list(self.call.args)
+        kwargs_map = dict(self.call.kwargs)
+        final_args: list[Any] = []
+        final_kwargs: dict[str, Any] = {}
+        idx = 0
+        context_value = self.command_context
+
+        for name, param in exec_sig.parameters.items():
+            if name in context_names_set:
+                if param.kind in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                ):
+                    final_args.append(context_value)
+                else:
+                    final_kwargs[name] = context_value
+                continue
+
+            if param.kind is inspect.Parameter.VAR_POSITIONAL:
+                if idx < len(args_list):
+                    final_args.extend(args_list[idx:])
+                    idx = len(args_list)
+                continue
+
+            if param.kind is inspect.Parameter.VAR_KEYWORD:
+                if kwargs_map:
+                    final_kwargs.update(kwargs_map)
+                    kwargs_map = {}
+                continue
+
+            if param.kind is inspect.Parameter.KEYWORD_ONLY:
+                if name in kwargs_map:
+                    final_kwargs[name] = kwargs_map.pop(name)
+                continue
+
+            if param.kind in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            ):
+                if name in kwargs_map:
+                    final_kwargs[name] = kwargs_map.pop(name)
+                    continue
+                if idx < len(args_list):
+                    final_args.append(args_list[idx])
+                    idx += 1
+                continue
+
+        if kwargs_map:
+            final_kwargs.update(kwargs_map)
+
+        return tuple(final_args), final_kwargs
+
+    def invoke_target(self) -> Any:
+        """Invoke the target callable using the resolved argument set."""
+
+        args, kwargs = self.resolve_call_arguments()
+        return self.target(*args, **kwargs)
+
+
+@dataclass(slots=True)
+class InvocationContext:
+    """User-facing command context exposing invocation metadata/state."""
+
+    invocation: Invocation
+
+    @property
+    def app(self) -> Any:
+        return self.invocation.app
+
+    @property
+    def name(self) -> str | None:
+        return self.invocation.name
+
+    @property
+    def click_context(self) -> Any | None:
+        return self.invocation.context
+
+    @property
+    def state(self) -> dict[str, Any]:
+        return self.invocation.state
+
+    @property
+    def args(self) -> tuple[Any, ...]:
+        return self.invocation.args
+
+    @property
+    def kwargs(self) -> dict[str, Any]:
+        return self.invocation.kwargs
+
+    def get_state(self, key: str, default: Any | None = None) -> Any | None:
+        """Convenience accessor mirroring dict.get against shared state."""
+
+        return self.state.get(key, default)
+
+
+# Friendly alias matching Click/Typer naming conventions
+CommandContext = InvocationContext
 
 
 class CommandHandler(Protocol):
