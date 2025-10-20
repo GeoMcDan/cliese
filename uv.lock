@@ -248,7 +248,7 @@ wheels = [
 
 [[package]]
 name = "typerplus"
-version = "0.0.1"
+version = "0.1.0a0"
 source = { editable = "." }
 dependencies = [
     { name = "rich" },
