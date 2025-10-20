@@ -4,6 +4,7 @@ from . import legacy
 from .config import PipelineConfig
 from .pipeline import Pipeline
 from .setup import (
+    add_virtual_option,
     enable_logger,
     get_config,
     get_pipeline,
@@ -40,6 +41,7 @@ __all__ = [
     "get_pipeline",
     "inject_context",
     "register_param_type",
+    "add_virtual_option",
     "use_decorator",
     "use_invocation_factory",
     "use_middleware",

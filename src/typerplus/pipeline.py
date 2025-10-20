@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import inspect
 import logging
+from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 import click
 import typer
@@ -93,6 +94,64 @@ def _create_param_type_hook(
         return func
 
     return ensure
+
+
+@dataclass(frozen=True)
+class _VirtualParameter:
+    name: str
+    parameter: inspect.Parameter
+    state_key: str | None
+    default_value: Any
+
+
+def _default_virtual_option(name: str, *, default: Any = False) -> ParameterInfo:
+    flag = f"--{name.replace('_', '-')}"
+    kwargs: dict[str, Any] = {
+        "help": f"Enable {name.replace('_', ' ')}.",
+        "show_default": True,
+    }
+    return typer.Option(default, flag, **kwargs)
+
+
+def _create_virtual_option_parameter(
+    name: str,
+    *,
+    option: ParameterInfo,
+    annotation_type: Any,
+) -> inspect.Parameter:
+    return inspect.Parameter(
+        name,
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        annotation=annotation_type,
+        default=option,
+    )
+
+
+def _apply_virtual_parameters(
+    func: Callable[..., Any],
+    params: Sequence[_VirtualParameter],
+) -> Callable[..., Any]:
+    if not params:
+        return func
+
+    sig = inspect.signature(func)
+    existing_params = list(sig.parameters.values())
+    existing_names = {param.name for param in existing_params}
+
+    added: list[str] = []
+    for virtual in params:
+        if virtual.name in existing_names:
+            continue
+        existing_params.append(virtual.parameter)
+        added.append(virtual.name)
+
+    if not added:
+        return func
+
+    func.__signature__ = sig.replace(parameters=existing_params)
+    current = getattr(func, "__typerplus_virtual_param_names__", ())
+    func.__typerplus_virtual_param_names__ = tuple(current) + tuple(added)
+    return func
 
 
 _CONTEXT_TYPE_SENTINELS = {"InvocationContext", "CommandContext"}
@@ -190,6 +249,7 @@ class Pipeline:
         self._decorators: list[Decorator] = list(decorators or [])
         self._middlewares: list[Middleware] = list(middlewares or [])
         self._param_hooks: list[Decorator] = []
+        self._virtual_params: list[_VirtualParameter] = []
         self._invocation_factory: InvocationFactory = (
             invocation_factory or _default_invocation_factory
         )
@@ -228,6 +288,42 @@ class Pipeline:
         self._param_hooks.append(hook)
         return self
 
+    def add_virtual_option(
+        self,
+        name: str,
+        *,
+        option: ParameterInfo | None = None,
+        annotation_type: Any = bool,
+        default: Any = False,
+        state_key: str | None = None,
+        store_in_state: bool = True,
+    ) -> "Pipeline":
+        """Expose an option to Typer without forwarding it to the user command."""
+
+        if any(virtual.name == name for virtual in self._virtual_params):
+            raise ValueError(f"Virtual option '{name}' is already registered.")
+
+        option = option or _default_virtual_option(name, default=default)
+        parameter = _create_virtual_option_parameter(
+            name=name,
+            option=option,
+            annotation_type=annotation_type,
+        )
+        default_value = getattr(option, "default", inspect.Signature.empty)
+        resolved_state_key: str | None = None
+        if store_in_state:
+            resolved_state_key = state_key or f"virtual:{name}"
+
+        self._virtual_params.append(
+            _VirtualParameter(
+                name=name,
+                parameter=parameter,
+                state_key=resolved_state_key,
+                default_value=default_value,
+            )
+        )
+        return self
+
     def enable_logger(
         self,
         *,
@@ -261,6 +357,9 @@ class Pipeline:
 
         for hook in self._param_hooks:
             decorated = hook(decorated)
+
+        current_virtual_params = list(self._virtual_params)
+        decorated = _apply_virtual_parameters(decorated, current_virtual_params)
 
         decorated = _ensure_invocation_context_parameter(decorated)
 
@@ -305,6 +404,12 @@ class Pipeline:
                 environment=environment,
                 call=call,
             )
+            for virtual in current_virtual_params:
+                if virtual.state_key:
+                    value = inv.call.kwargs.get(virtual.name, virtual.default_value)
+                    if value is inspect.Signature.empty:
+                        value = None
+                    inv.state[virtual.state_key] = value
             return handler(inv)
 
         # Guarantee Typer sees the signature from `decorated` even with wraps

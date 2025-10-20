@@ -155,6 +155,40 @@ def test_extended_typer_register_param_type_delegates():
     assert captured["token"] == "cba"
 
 
+def test_extended_typer_virtual_option_exposed_and_captured():
+    pipeline = Pipeline()
+    app = ExtendedTyper(pipeline=pipeline)
+    app.add_virtual_option(
+        "what_if",
+        option=typer.Option(False, "--what-if", help="Dry run"),
+    )
+
+    seen: dict[str, Any] = {}
+    captured: dict[str, Any] = {}
+
+    @app.before_invoke
+    def capture(inv: Invocation):
+        seen["kwargs"] = dict(inv.kwargs)
+        seen["state"] = inv.state.get("virtual:what_if")
+
+    @app.command()
+    def run(value: int):
+        captured["value"] = value
+
+    result = runner.invoke(app, ["5", "--what-if"])
+    if result.exception:
+        raise result.exception
+
+    assert captured["value"] == 5
+    assert seen["kwargs"]["what_if"] is True
+    assert seen["state"] is True
+
+    help_result = runner.invoke(app, ["--help"])
+    if help_result.exception:
+        raise help_result.exception
+    assert "--what-if" in help_result.stdout
+
+
 def test_extended_typer_set_invocation_factory_applies_custom_factory():
     app = ExtendedTyper()
     created: list[Invocation] = []

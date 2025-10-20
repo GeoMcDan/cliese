@@ -74,6 +74,28 @@ class ExtendedTyper(typer.Typer):
         )
         return self
 
+    def add_virtual_option(
+        self,
+        name: str,
+        *,
+        option: ParameterInfo | None = None,
+        annotation_type: Any = bool,
+        default: Any = False,
+        state_key: str | None = None,
+        store_in_state: bool = True,
+    ) -> "ExtendedTyper":
+        """Expose Pipeline.add_virtual_option via the Typer facade."""
+
+        self.pipeline.add_virtual_option(
+            name,
+            option=option,
+            annotation_type=annotation_type,
+            default=default,
+            state_key=state_key,
+            store_in_state=store_in_state,
+        )
+        return self
+
     def enable_logger(
         self,
         *,

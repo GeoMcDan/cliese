@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 from typer.models import ParameterInfo
 
@@ -29,6 +29,28 @@ class ParamTypeHook:
 
 
 @dataclass(frozen=True)
+class VirtualOptionConfig:
+    """Configuration describing a Pipeline.add_virtual_option call."""
+
+    name: str
+    option: ParameterInfo | None = None
+    annotation_type: Any = bool
+    default: Any = False
+    state_key: str | None = None
+    store_in_state: bool = True
+
+    def apply(self, pipeline: "Pipeline") -> None:
+        pipeline.add_virtual_option(
+            self.name,
+            option=self.option,
+            annotation_type=self.annotation_type,
+            default=self.default,
+            state_key=self.state_key,
+            store_in_state=self.store_in_state,
+        )
+
+
+@dataclass(frozen=True)
 class PipelineConfig:
     """Immutable bundle of pipeline customisations."""
 
@@ -36,6 +58,7 @@ class PipelineConfig:
     middlewares: tuple[Middleware, ...] = ()
     invocation_factory: InvocationFactory | None = None
     param_type_hooks: tuple[ParamTypeHook, ...] = ()
+    virtual_options: tuple[VirtualOptionConfig, ...] = ()
 
     def to_pipeline(self) -> "Pipeline":
         """Materialise a Pipeline instance based on this configuration."""
@@ -49,6 +72,8 @@ class PipelineConfig:
         )
         for hook in self.param_type_hooks:
             hook.apply(pipeline)
+        for option in self.virtual_options:
+            option.apply(pipeline)
         return pipeline
 
     def add_decorator(self, decorator: Decorator) -> "PipelineConfig":
@@ -103,6 +128,28 @@ class PipelineConfig:
         )
         return replace(self, param_type_hooks=self.param_type_hooks + (hook,))
 
+    def add_virtual_option(
+        self,
+        name: str,
+        *,
+        option: ParameterInfo | None = None,
+        annotation_type: Any = bool,
+        default: Any = False,
+        state_key: str | None = None,
+        store_in_state: bool = True,
+    ) -> "PipelineConfig":
+        """Return a new config with an additional virtual option registration."""
+
+        virtual = VirtualOptionConfig(
+            name=name,
+            option=option,
+            annotation_type=annotation_type,
+            default=default,
+            state_key=state_key,
+            store_in_state=store_in_state,
+        )
+        return replace(self, virtual_options=self.virtual_options + (virtual,))
+
     def merge(self, other: "PipelineConfig") -> "PipelineConfig":
         """Merge two configs, concatenating decorators, middlewares and hooks."""
 
@@ -113,4 +160,5 @@ class PipelineConfig:
             if other.invocation_factory is not None
             else self.invocation_factory,
             param_type_hooks=self.param_type_hooks + other.param_type_hooks,
+            virtual_options=self.virtual_options + other.virtual_options,
         )

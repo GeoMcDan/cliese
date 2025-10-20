@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from typer.models import ParameterInfo
 
@@ -102,6 +102,29 @@ def register_param_type(
             param_type,
             option_factory=option_factory,
             parser_factory=parser_factory,
+        )
+    )
+
+
+def add_virtual_option(
+    name: str,
+    *,
+    option: ParameterInfo | None = None,
+    annotation_type: Any = bool,
+    default: Any = False,
+    state_key: str | None = None,
+    store_in_state: bool = True,
+) -> Pipeline:
+    """Register a virtual option on the global pipeline."""
+
+    return _mutate_config(
+        lambda cfg: cfg.add_virtual_option(
+            name,
+            option=option,
+            annotation_type=annotation_type,
+            default=default,
+            state_key=state_key,
+            store_in_state=store_in_state,
         )
     )
 

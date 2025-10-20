@@ -102,12 +102,20 @@ class Invocation:
         context_param_names: tuple[str, ...] = getattr(
             self.target, "__typerplus_context_param_names__", ()
         )
+        virtual_param_names: tuple[str, ...] = getattr(
+            self.target, "__typerplus_virtual_param_names__", ()
+        )
 
         exec_sig = original_sig or inspect.signature(self.target)
         context_names_set = set(context_param_names)
+        virtual_names_set = set(virtual_param_names)
 
         args_list = list(self.call.args)
         kwargs_map = dict(self.call.kwargs)
+        # Remove virtual parameters from the working kwargs map so they are not forwarded.
+        for virtual_name in virtual_names_set:
+            kwargs_map.pop(virtual_name, None)
+
         final_args: list[Any] = []
         final_kwargs: dict[str, Any] = {}
         idx = 0
@@ -122,6 +130,14 @@ class Invocation:
                     final_args.append(context_value)
                 else:
                     final_kwargs[name] = context_value
+                continue
+
+            if name in virtual_names_set:
+                if param.kind in (
+                    inspect.Parameter.POSITIONAL_ONLY,
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                ) and idx < len(args_list):
+                    idx += 1
                 continue
 
             if param.kind is inspect.Parameter.VAR_POSITIONAL:

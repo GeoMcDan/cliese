@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 from typerplus import (
     ExtendedTyper,
     PipelineConfig,
+    add_virtual_option,
     enable_logger,
     get_config,
     get_pipeline,
@@ -266,5 +267,34 @@ def test_setup_register_param_type_delegates_to_global_pipeline():
         option = _option_from_annotation(param.annotation)
         assert option is not None
         assert isinstance(option.click_type, TokenParser)
+    finally:
+        setup()
+
+
+def test_add_virtual_option_configures_global_pipeline():
+    setup()
+
+    try:
+        add_virtual_option(
+            "what_if",
+            option=typer.Option(
+                False,
+                "--what-if",
+                help="Dry run",
+            ),
+        )
+
+        pipeline = get_pipeline()
+
+        def cmd(value: int):
+            return value
+
+        wrapped = pipeline.build(cmd)
+        sig = inspect.signature(wrapped)
+        assert "what_if" in sig.parameters
+        assert wrapped(value=2, what_if=True) == 2
+
+        config = get_config()
+        assert any(opt.name == "what_if" for opt in config.virtual_options)
     finally:
         setup()

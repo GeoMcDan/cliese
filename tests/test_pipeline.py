@@ -282,6 +282,40 @@ def test_pipeline_supports_command_context_alias():
     assert seen["args"] == (10,)
 
 
+def test_pipeline_virtual_option_exposed_without_forwarding():
+    pipeline = Pipeline()
+    pipeline.add_virtual_option(
+        "what_if",
+        option=Option(False, "--what-if", help="Execute in what-if mode."),
+    )
+
+    observed: dict[str, Any] = {}
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            observed["kwargs"] = dict(inv.kwargs)
+            observed["state"] = inv.state.get("virtual:what_if")
+            return next_handler(inv)
+
+        return handler
+
+    pipeline.use(capture)
+
+    def command(value: int):
+        observed["value"] = value
+        return value
+
+    wrapped = pipeline.build(command)
+    sig = inspect.signature(wrapped)
+    assert "what_if" in sig.parameters
+
+    result = wrapped(value=3, what_if=True)
+    assert result == 3
+    assert observed["value"] == 3
+    assert observed["kwargs"]["what_if"] is True
+    assert observed["state"] is True
+
+
 def test_pipeline_extended_typer_command_receives_invocation_context():
     pipeline = Pipeline()
 
