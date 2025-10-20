@@ -18,7 +18,7 @@ from .types import (
 )
 
 
-class ExtendedTyper(typer.Typer):
+class TyperPlus(typer.Typer):
     """
     Typer subclass that composes a CLI middleware pipeline with Flask/FastAPI-like helpers.
 
@@ -49,12 +49,12 @@ class ExtendedTyper(typer.Typer):
         self.pipeline.add_signature_transform(decorator)
         return decorator
 
-    def inject_context(self) -> "ExtendedTyper":
+    def inject_context(self) -> "TyperPlus":
         """Ensure Typer Context is available to commands and middleware."""
         self.pipeline.inject_context()
         return self
 
-    def set_invocation_factory(self, factory: InvocationFactory) -> "ExtendedTyper":
+    def set_invocation_factory(self, factory: InvocationFactory) -> "TyperPlus":
         """Swap the invocation factory used when commands execute."""
         self.pipeline.set_invocation_factory(factory)
         return self
@@ -65,7 +65,7 @@ class ExtendedTyper(typer.Typer):
         *,
         option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
         parser_factory: Callable[[], object] | type | object | None = None,
-    ) -> "ExtendedTyper":
+    ) -> "TyperPlus":
         """Expose Pipeline.register_param_type via the Typer facade."""
         self.pipeline.register_param_type(
             param_type,
@@ -83,7 +83,7 @@ class ExtendedTyper(typer.Typer):
         default: Any = False,
         state_key: str | None = None,
         store_in_state: bool = True,
-    ) -> "ExtendedTyper":
+    ) -> "TyperPlus":
         """Expose Pipeline.add_virtual_option via the Typer facade."""
 
         self.pipeline.add_virtual_option(
@@ -101,7 +101,7 @@ class ExtendedTyper(typer.Typer):
         *,
         option_factory: Callable[[inspect.Parameter], ParameterInfo] | None = None,
         parser_factory: Callable[[], object] | type | object | None = None,
-    ) -> "ExtendedTyper":
+    ) -> "TyperPlus":
         """Enable Logger injection for this app's pipeline."""
         self.pipeline.enable_logger(
             option_factory=option_factory,

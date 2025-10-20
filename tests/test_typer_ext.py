@@ -8,15 +8,15 @@ import typer
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
-from typerplus import ExtendedTyper, Pipeline
+from typerplus import Pipeline, TyperPlus
 from typerplus.parser.logger import LoggerParser
 from typerplus.types import Invocation
 
 runner = CliRunner()
 
 
-def test_extended_typer_uses_pipeline_decorator_and_middleware():
-    """ExtendedTyper uses pipeline: decorator exposes option and middleware wraps execution."""
+def test_typer_plus_uses_pipeline_decorator_and_middleware():
+    """TyperPlus uses pipeline: decorator exposes option and middleware wraps execution."""
     events: list[str] = []
 
     def dec(func):
@@ -33,7 +33,7 @@ def test_extended_typer_uses_pipeline_decorator_and_middleware():
         return wrapper
 
     # Invoke-time: simple pre/post wrapper to show middleware ordering works
-    # with ExtendedTyper in the same way as with bare Pipeline.
+    # with TyperPlus in the same way as with bare Pipeline.
     def mw(next):
         def handler(inv):
             events.append("pre")
@@ -44,9 +44,9 @@ def test_extended_typer_uses_pipeline_decorator_and_middleware():
         return handler
 
     # Compose decorator + middleware and pass explicitly to the app. If no
-    # pipeline is provided, ExtendedTyper would use the global one.
+    # pipeline is provided, TyperPlus would use the global one.
     pipeline = Pipeline().use_decorator(dec).use(mw)
-    app = ExtendedTyper(pipeline=pipeline)
+    app = TyperPlus(pipeline=pipeline)
 
     @app.command()
     def hello():
@@ -73,9 +73,9 @@ def _option_from_annotation(annotation):
     return None
 
 
-def test_extended_typer_enable_logger_adds_option_and_parser():
+def test_typer_plus_enable_logger_adds_option_and_parser():
     captured = {}
-    app = ExtendedTyper()
+    app = TyperPlus()
     app.enable_logger()
 
     @app.command()
@@ -93,13 +93,13 @@ def test_extended_typer_enable_logger_adds_option_and_parser():
     if result.exception:
         raise result.exception
 
-    # LoggerParser maps -vv -> INFO
+    # LoggerParser maps -vv -> DEBUG
     assert captured["level"] == logging.DEBUG
 
 
-def test_extended_typer_before_after_invoke_helpers():
+def test_typer_plus_before_after_invoke_helpers():
     order: list[str] = []
-    app = ExtendedTyper()
+    app = TyperPlus()
 
     @app.before_invoke
     def capture_before(inv: Any):
@@ -120,7 +120,7 @@ def test_extended_typer_before_after_invoke_helpers():
     assert order == ["before", "body", "after"]
 
 
-def test_extended_typer_register_param_type_delegates():
+def test_typer_plus_register_param_type_delegates():
     class Token(str):
         pass
 
@@ -130,7 +130,7 @@ def test_extended_typer_register_param_type_delegates():
         def convert(self, value, parameter, ctx):
             return Token(value[::-1])
 
-    app = ExtendedTyper()
+    app = TyperPlus()
     app.register_param_type(
         Token,
         option_factory=lambda param: typer.Option(..., "--token"),
@@ -155,9 +155,9 @@ def test_extended_typer_register_param_type_delegates():
     assert captured["token"] == "cba"
 
 
-def test_extended_typer_virtual_option_exposed_and_captured():
+def test_typer_plus_virtual_option_exposed_and_captured():
     pipeline = Pipeline()
-    app = ExtendedTyper(pipeline=pipeline)
+    app = TyperPlus(pipeline=pipeline)
     app.add_virtual_option(
         "what_if",
         option=typer.Option(False, "--what-if", help="Dry run"),
@@ -189,8 +189,8 @@ def test_extended_typer_virtual_option_exposed_and_captured():
     assert "--what-if" in help_result.stdout
 
 
-def test_extended_typer_set_invocation_factory_applies_custom_factory():
-    app = ExtendedTyper()
+def test_typer_plus_set_invocation_factory_applies_custom_factory():
+    app = TyperPlus()
     created: list[Invocation] = []
     seen: list[str] = []
     contexts: list[Any] = []
@@ -234,7 +234,7 @@ def test_extended_typer_set_invocation_factory_applies_custom_factory():
     assert contexts and contexts[0] is not None
 
 
-def test_extended_typer_integration_provides_typer_context():
+def test_typer_plus_integration_provides_typer_context():
     decorator_contexts: list[click.Context] = []
     middleware_contexts: list[click.Context] = []
     invocation_contexts: list[click.Context] = []
@@ -263,7 +263,7 @@ def test_extended_typer_integration_provides_typer_context():
         return handler
 
     pipeline = Pipeline().use_decorator(context_decorator).use(context_middleware)
-    app = ExtendedTyper(pipeline=pipeline)
+    app = TyperPlus(pipeline=pipeline)
     app.inject_context()
 
     @app.command()

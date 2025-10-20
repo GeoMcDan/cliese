@@ -7,7 +7,7 @@ from typer import Option
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
-from typerplus import ExtendedTyper
+from typerplus import TyperPlus
 from typerplus.parser.logger import LoggerParser
 from typerplus.pipeline import Pipeline, _instantiate_parser
 from typerplus.types import CommandContext, Invocation, InvocationContext
@@ -316,7 +316,7 @@ def test_pipeline_virtual_option_exposed_without_forwarding():
     assert observed["state"] is True
 
 
-def test_pipeline_extended_typer_command_receives_invocation_context():
+def test_pipeline_typer_plus_command_receives_invocation_context():
     pipeline = Pipeline()
 
     def seed_state(next_handler):
@@ -327,7 +327,7 @@ def test_pipeline_extended_typer_command_receives_invocation_context():
         return handler
 
     pipeline.use(seed_state)
-    app = ExtendedTyper(pipeline=pipeline)
+    app = TyperPlus(pipeline=pipeline)
     captured: dict[str, Any] = {}
 
     @app.command()
@@ -357,8 +357,8 @@ def test_pipeline_extended_typer_command_receives_invocation_context():
     assert captured["kwargs"] == {"value": 5}
 
 
-def test_extended_typer_command_receives_invocation_context():
-    app = ExtendedTyper()
+def test_typer_plus_command_receives_invocation_context():
+    app = TyperPlus()
     captured: dict[str, Any] = {}
 
     @app.command()

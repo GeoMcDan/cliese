@@ -17,7 +17,7 @@ from .setup import (
 )
 from .testing import TestApp
 from .testing import runner as test_runner
-from .typer_ext import ExtendedTyper
+from .typer_ext import TyperPlus
 from .types import (
     CommandContext,
     CommandHandler,
@@ -46,7 +46,7 @@ __all__ = [
     "use_invocation_factory",
     "use_middleware",
     "enable_logger",
-    "ExtendedTyper",
+    "TyperPlus",
     "TestApp",
     "test_runner",
     "legacy",

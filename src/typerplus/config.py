@@ -61,7 +61,7 @@ class PipelineConfig:
     virtual_options: tuple[VirtualOptionConfig, ...] = ()
 
     def to_pipeline(self) -> "Pipeline":
-        """Materialise a Pipeline instance based on this configuration."""
+        """Materialize a Pipeline instance based on this configuration."""
 
         from .pipeline import Pipeline
 

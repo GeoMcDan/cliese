@@ -3,7 +3,7 @@ from __future__ import annotations
 from typer.testing import CliRunner
 
 from .pipeline import Pipeline
-from .typer_ext import ExtendedTyper
+from .typer_ext import TyperPlus
 
 __all__ = ["TestApp", "runner"]
 
@@ -15,7 +15,7 @@ class TestApp:
 
     def __init__(self, *, pipeline: Pipeline | None = None):
         self.pipeline = pipeline or Pipeline()
-        self.app = ExtendedTyper(pipeline=self.pipeline)
+        self.app = TyperPlus(pipeline=self.pipeline)
         self.runner = CliRunner()
 
     @property

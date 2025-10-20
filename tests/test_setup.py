@@ -10,8 +10,8 @@ from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from typerplus import (
-    ExtendedTyper,
     PipelineConfig,
+    TyperPlus,
     add_virtual_option,
     enable_logger,
     get_config,
@@ -31,7 +31,7 @@ runner = CliRunner()
 
 def test_setup_and_global_pipeline_basic():
     """Configure global pipeline; decorator exposes CLI option and middleware runs around command."""
-    # Reset and configure global pipeline. Subsequent ExtendedTyper apps created
+    # Reset and configure global pipeline. Subsequent TyperPlus apps created
     # without an explicit pipeline will use this configured global pipeline.
     setup()
 
@@ -63,7 +63,7 @@ def test_setup_and_global_pipeline_basic():
     use_middleware(mw_a)
 
     # Build an app that implicitly uses the global pipeline configured above.
-    app = ExtendedTyper()
+    app = TyperPlus()
 
     @app.command()
     def cmd():
@@ -101,7 +101,7 @@ def test_setup_overwrites_global():
 
     use_middleware(mw)
     # New app uses the new global pipeline instance with our middleware.
-    app = ExtendedTyper()
+    app = TyperPlus()
 
     @app.command()
     def cmd():
@@ -118,7 +118,7 @@ def test_setup_enable_logger_global_pipeline():
     enable_logger()
 
     captured: dict[str, int] = {}
-    app = ExtendedTyper()
+    app = TyperPlus()
 
     @app.command()
     def cmd(logger: logging.Logger):
