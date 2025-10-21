@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import inspect
-from functools import wraps
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, Type, Union
 
 import typer
-from typer.models import ParameterInfo
+from typer.core import DEFAULT_MARKUP_MODE, TyperCommand
+from typer.models import CommandFunctionType, Default, ParameterInfo
 
 from .pipeline import Pipeline
 from .setup import get_pipeline
@@ -30,8 +30,64 @@ class TyperPlus(typer.Typer):
     Advanced users can still pass a fully customised `Pipeline` instance.
     """
 
-    def __init__(self, *args, pipeline: Pipeline | None = None, **kwargs):
-        super().__init__(*args, **kwargs)
+    if TYPE_CHECKING:
+        from typer.core import MarkupMode
+        from typer.models import TyperGroup, TyperInfo
+
+    def __init__(
+        self,
+        *,
+        name: Optional[str] = Default(None),
+        cls: Optional[Type[TyperGroup]] = Default(None),
+        invoke_without_command: bool = Default(False),
+        no_args_is_help: bool = Default(False),
+        subcommand_metavar: Optional[str] = Default(None),
+        chain: bool = Default(False),
+        result_callback: Optional[Callable[..., Any]] = Default(None),
+        # Command
+        context_settings: Optional[Dict[Any, Any]] = Default(None),
+        callback: Optional[Callable[..., Any]] = Default(None),
+        help: Optional[str] = Default(None),
+        epilog: Optional[str] = Default(None),
+        short_help: Optional[str] = Default(None),
+        options_metavar: str = Default("[OPTIONS]"),
+        add_help_option: bool = Default(True),
+        hidden: bool = Default(False),
+        deprecated: bool = Default(False),
+        add_completion: bool = True,
+        # Rich settings
+        rich_markup_mode: MarkupMode = Default(DEFAULT_MARKUP_MODE),
+        rich_help_panel: Union[str, None] = Default(None),
+        pretty_exceptions_enable: bool = True,
+        pretty_exceptions_show_locals: bool = True,
+        pretty_exceptions_short: bool = True,
+        # TyperPlus
+        pipeline: Pipeline | None = None,
+    ):
+        super().__init__(
+            name=name,
+            cls=cls,
+            invoke_without_command=invoke_without_command,
+            no_args_is_help=no_args_is_help,
+            subcommand_metavar=subcommand_metavar,
+            chain=chain,
+            result_callback=result_callback,
+            context_settings=context_settings,
+            callback=callback,
+            help=help,
+            epilog=epilog,
+            short_help=short_help,
+            options_metavar=options_metavar,
+            add_help_option=add_help_option,
+            hidden=hidden,
+            deprecated=deprecated,
+            add_completion=add_completion,
+            rich_markup_mode=rich_markup_mode,
+            rich_help_panel=rich_help_panel,
+            pretty_exceptions_enable=pretty_exceptions_enable,
+            pretty_exceptions_show_locals=pretty_exceptions_show_locals,
+            pretty_exceptions_short=pretty_exceptions_short,
+        )
         self._pipeline = pipeline
 
     @property
@@ -140,13 +196,43 @@ class TyperPlus(typer.Typer):
         self.add_middleware(middleware)
         return func
 
-    @wraps(typer.Typer.command)
-    def command(self, *args, **kwargs):
-        base_decorator = self.base_command(*args, **kwargs)
+    def command(
+        self,
+        name: Optional[str] = None,
+        *,
+        cls: Optional[Type[TyperCommand]] = None,
+        context_settings: Optional[Dict[Any, Any]] = None,
+        help: Optional[str] = None,
+        epilog: Optional[str] = None,
+        short_help: Optional[str] = None,
+        options_metavar: str = "[OPTIONS]",
+        add_help_option: bool = True,
+        no_args_is_help: bool = False,
+        hidden: bool = False,
+        deprecated: bool = False,
+        # Rich settings
+        rich_help_panel: Union[str, None] = Default(None),
+    ) -> Callable[[CommandFunctionType], CommandFunctionType]:
+        base_decorator = super().command(
+            name,
+            cls=cls,
+            context_settings=context_settings,
+            help=help,
+            epilog=epilog,
+            short_help=short_help,
+            options_metavar=options_metavar,
+            add_help_option=add_help_option,
+            no_args_is_help=no_args_is_help,
+            hidden=hidden,
+            deprecated=deprecated,
+            rich_help_panel=rich_help_panel,
+        )
+
         pipeline = self.pipeline
 
         def register(func: Callable[..., Any]) -> Callable[..., Any]:
-            name = kwargs.get("name") or getattr(func, "__name__", None)
+            nonlocal name
+            name = name or getattr(func, "__name__", None)
             wrapped = pipeline.build(func, app=self, name=name)
             # Typer registers the adapter; returns the wrapper Typer uses
             callback = base_decorator(wrapped)
@@ -156,7 +242,3 @@ class TyperPlus(typer.Typer):
             return callback
 
         return register
-
-    @wraps(typer.Typer.command)
-    def base_command(self, *args, **kwargs):
-        return super().command(*args, **kwargs)
