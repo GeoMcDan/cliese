@@ -24,3 +24,4 @@ repos:
     rev: 0.9.4
     hooks:
       - id: uv-export
+        args: ["--no-emit-project", "--frozen", "--output-file=requirements", "--quiet"]
