@@ -36,7 +36,6 @@ jobs:
     - name: Install project
       run: |
         pip install -e .
-        pip uninstall rich -y
     - name: Lint with ruff
       run: |
         ruff check
