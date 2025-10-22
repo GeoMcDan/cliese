@@ -1,7 +1,6 @@
 import inspect
 import logging
-import os
-from functools import wraps
+from functools import partial, wraps
 from typing import Annotated, Any, get_args, get_origin
 
 import click
@@ -13,8 +12,8 @@ from typerplus import Pipeline, TyperPlus
 from typerplus.parser.logger import LoggerParser
 from typerplus.types import Invocation
 
-os.environ["NO_COLOR"] = "1"
 runner = CliRunner()
+runner.invoke = partial(runner.invoke, color=False)
 
 
 def test_typer_plus_uses_pipeline_decorator_and_middleware():
