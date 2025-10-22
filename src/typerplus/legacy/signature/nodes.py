@@ -5,7 +5,12 @@ import typing
 from collections.abc import Iterable as ABCIterable
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Mapping, override
+from typing import Mapping
+
+try:
+    from typing import override
+except ImportError:  # Python < 3.12
+    from typing_extensions import override
 
 
 class ParameterKind(IntEnum):

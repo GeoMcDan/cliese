@@ -2,7 +2,6 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 
-
 [[package]]
 name = "click"
 version = "8.3.0"
@@ -313,6 +312,15 @@ wheels = [
 ]
 
 [[package]]
+name = "type-extensions"
+version = "0.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/d0/18bf3a92af3f6a0fc38f874e858d707242ac5c14148ff1c4ee1615397e73/type_extensions-0.1.2.tar.gz", hash = "sha256:7c7b54eba6d7401ad5e69ecec6b7c767d7d7aae9b2b7e56249bc7bcaf833161f", size = 16102, upload-time = "2020-02-26T17:30:57.395Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/dc/707d386bbd830d72fdd58c06f1d8a935d2553498f6868cd7de141addbe06/type_extensions-0.1.2-py2.py3-none-any.whl", hash = "sha256:fc9c8506f87b6227eeb43795061d61571b66a07df6fbcacf31a17d2cb2050153", size = 5566, upload-time = "2020-02-26T17:30:56.378Z" },
+]
+
+[[package]]
 name = "typer"
 version = "0.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -333,6 +341,7 @@ version = "0.1.0a1.post1"
 source = { editable = "." }
 dependencies = [
     { name = "rich" },
+    { name = "type-extensions" },
     { name = "typer" },
 ]
 
@@ -347,6 +356,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "rich", specifier = ">=14.1.0" },
+    { name = "type-extensions", specifier = ">=0.1.2" },
     { name = "typer", specifier = ">=0.19.2" },
 ]
 
