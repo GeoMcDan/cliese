@@ -1,5 +1,6 @@
 import inspect
 import logging
+import os
 from functools import wraps
 from typing import Annotated, Any, get_args, get_origin
 
@@ -12,6 +13,7 @@ from typerplus import Pipeline, TyperPlus
 from typerplus.parser.logger import LoggerParser
 from typerplus.types import Invocation
 
+os.environ["NO_COLOR"] = "1"
 runner = CliRunner()
 
 
