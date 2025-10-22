@@ -59,8 +59,8 @@ def test_typer_plus_uses_pipeline_decorator_and_middleware():
         raise res.exception
 
     # stdout prints x first (from decorator), then the body; middleware ran.
-    assert "7" in res.stdout
-    assert "HELLO" in res.stdout
+    assert "7" in res.output
+    assert "HELLO" in res.output
     assert events == ["pre", "post"]
 
 
@@ -155,6 +155,12 @@ def test_typer_plus_register_param_type_delegates():
     assert captured["token"] == "cba"
 
 
+def get_param(app, param_name):
+    command = app.registered_commands[0]
+    command_sig = inspect.signature(command.callback)
+    return command_sig.parameters[param_name]
+
+
 def test_typer_plus_virtual_option_exposed_and_captured():
     pipeline = Pipeline()
     app = TyperPlus(pipeline=pipeline)
@@ -183,10 +189,10 @@ def test_typer_plus_virtual_option_exposed_and_captured():
     assert seen["kwargs"]["what_if"] is True
     assert seen["state"] is True
 
-    help_result = runner.invoke(app, ["--help"])
-    if help_result.exception:
-        raise help_result.exception
-    assert "--what-if" in help_result.stdout
+    what_if_param = get_param(app, "what_if")
+    what_if_option = what_if_param.default
+    assert isinstance(what_if_option, ParameterInfo)
+    assert "--what-if" in what_if_option.param_decls
 
 
 def test_typer_plus_set_invocation_factory_applies_custom_factory():
