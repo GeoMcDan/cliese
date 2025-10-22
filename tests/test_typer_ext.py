@@ -1,6 +1,6 @@
 import inspect
 import logging
-from functools import partial, wraps
+from functools import wraps
 from typing import Annotated, Any, get_args, get_origin
 
 import click
@@ -13,7 +13,6 @@ from typerplus.parser.logger import LoggerParser
 from typerplus.types import Invocation
 
 runner = CliRunner()
-runner.invoke = partial(runner.invoke, color=False)
 
 
 def test_typer_plus_uses_pipeline_decorator_and_middleware():
@@ -60,8 +59,8 @@ def test_typer_plus_uses_pipeline_decorator_and_middleware():
         raise res.exception
 
     # stdout prints x first (from decorator), then the body; middleware ran.
-    assert "7" in res.stdout
-    assert "HELLO" in res.stdout
+    assert "7" in res.output
+    assert "HELLO" in res.output
     assert events == ["pre", "post"]
 
 
@@ -187,7 +186,7 @@ def test_typer_plus_virtual_option_exposed_and_captured():
     help_result = runner.invoke(app, ["--help"])
     if help_result.exception:
         raise help_result.exception
-    assert "--what-if" in help_result.stdout
+    assert "--what-if" in help_result.output
 
 
 def test_typer_plus_set_invocation_factory_applies_custom_factory():
