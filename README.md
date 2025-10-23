@@ -5,6 +5,7 @@
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
 <!-- END BADGIE TIME -->
+![codecov](https://img.shields.io/codecov/c/github/geomcdan/cliese/main)
 
 **Pipeline-powered CLIs without giving up Typer's ergonomics.** Typer Plus layers a middleware pipeline on top of `typer.Typer` so you can shape signatures, inject dependencies, and coordinate cross-cutting behavior while keeping command functions clean.
 
