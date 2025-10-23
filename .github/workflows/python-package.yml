@@ -45,15 +45,3 @@ jobs:
     - name: Test with pytest
       run: |
         pytest --cov=src/typerplus --cov-report=term-missing --cov-report=xml
-    - name: Update coverage badge
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      run: |
-        python -m pip install coverage-badge
-        mkdir -p badges
-        python -m coverage_badge -o badges/coverage.svg
-    - name: Commit coverage badge
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: EndBug/add-and-commit@v9
-      with:
-        add: badges/coverage.svg
-        message: "chore: update coverage badge"

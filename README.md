@@ -1,8 +1,10 @@
 # Typer Plus
 
-[![Coverage](./badges/coverage.svg)](https://github.com/GeoMcDan/cliese/actions/workflows/python-package.yml)
-[![Python Versions](https://img.shields.io/badge/python-3.11%E2%80%933.14-3776AB?logo=python&logoColor=white)](pyproject.toml)
-[![pytest](https://github.com/GeoMcDan/cliese/actions/workflows/python-package.yml/badge.svg?branch=main)](https://github.com/GeoMcDan/cliese/actions/workflows/python-package.yml)
+<!-- BADGIE TIME -->
+
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
+
+<!-- END BADGIE TIME -->
 
 **Pipeline-powered CLIs without giving up Typer's ergonomics.** Typer Plus layers a middleware pipeline on top of `typer.Typer` so you can shape signatures, inject dependencies, and coordinate cross-cutting behavior while keeping command functions clean.
 

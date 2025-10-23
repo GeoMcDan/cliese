@@ -26,6 +26,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "badgie>=0.14.2",
+    "isort>=7.0.0",
     "pytest>=8.4.2",
     "pytest-cov>=7.0.0",
     "pytest-mock>=3.15.1",
