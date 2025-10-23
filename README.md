@@ -12,6 +12,8 @@
 ![commit](https://badgen.net/github/last-commit/geomcdan/cliese)
 ![commits](https://badgen.net/github/commits/geomcdan/cliese)
 ![prs](https://badgen.net/github/closed-prs/geomcdan/cliese)
+![version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FGeoMcDan%2Fcliese%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
+![commitactivity](https://img.shields.io/github/commit-activity/m/geomcdan/cliese)
 
 **Pipeline-powered CLIs without giving up Typer's ergonomics.** Typer Plus layers a middleware pipeline on top of `typer.Typer` so you can shape signatures, inject dependencies, and coordinate cross-cutting behavior while keeping command functions clean.
 
