@@ -10,7 +10,12 @@ from typer.testing import CliRunner
 
 from typerplus import TyperPlus
 from typerplus.parser.logger import LoggerParser
-from typerplus.pipeline import Pipeline, _ensure_context_parameter, _instantiate_parser
+from typerplus.pipeline import (
+    Pipeline,
+    _ensure_context_parameter,
+    _ensure_invocation_context_parameter,
+    _instantiate_parser,
+)
 from typerplus.types import CommandContext, Invocation, InvocationContext
 
 
@@ -262,6 +267,21 @@ def test_ensure_context_parameter_noop_when_ctx_typed():
     assert str(inspect.signature(out)) == str(inspect.signature(func))
 
 
+def test_ensure_context_parameter_noop_when_already_ensured():
+    def temp(j: InvocationContext): ...
+
+    _ensure_invocation_context_parameter(temp)
+    assert getattr(temp, "__typerplus_original_signature__", None)
+    assert getattr(temp, "__typerplus_runtime_signature__", None)
+
+    def temp2(j: InvocationContext): ...
+
+    setattr(temp2, "__typerplus_context_param_names__", True)
+    _ensure_invocation_context_parameter(temp2)
+    assert not getattr(temp2, "__typerplus_original_signature__", False)
+    assert not getattr(temp2, "__typerplus_runtime_signature__", False)
+
+
 def test_pipeline_injects_invocation_context_for_commands():
     pipeline = Pipeline()
 
@@ -335,11 +355,11 @@ def test_pipeline_virtual_option_exposed_without_forwarding():
 
     pipeline.use(capture)
 
-    def command(value: int):
+    @pipeline.build
+    def wrapped(value: int):
         observed["value"] = value
         return value
 
-    wrapped = pipeline.build(command)
     sig = inspect.signature(wrapped)
     assert "what_if" in sig.parameters
 
@@ -360,6 +380,15 @@ def test_apply_virtual_parameters_ignores_existing_param_name():
     sig = inspect.signature(wrapped)
     # No duplicate param added; remains as originally declared
     assert list(sig.parameters) == ["flag"]
+
+
+def test_apply_virtual_parameters_dup_raises_error():
+    from pytest import raises
+
+    p = Pipeline().add_virtual_option("flag")
+
+    with raises(ValueError):
+        p.add_virtual_option("flag")
 
 
 def test_pipeline_typer_plus_command_receives_invocation_context():
