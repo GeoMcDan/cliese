@@ -230,12 +230,14 @@ class CommandHandler(Protocol):
         ...
 
 
-class Middleware(Protocol):
+class _Middleware(Protocol):
     """Middleware shape: takes next handler, returns a new handler."""
 
     def __call__(self, next: CommandHandler) -> CommandHandler:  # pragma: no cover
         ...
 
+
+Middleware = _Middleware | Callable[[CommandHandler], CommandHandler]
 
 # Decorator type used to transform function signature/metadata
 Decorator = Callable[[Callable[..., Any]], Callable[..., Any]]
