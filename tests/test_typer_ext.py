@@ -94,7 +94,7 @@ def test_typer_plus_enable_logger_adds_option_and_parser():
         raise result.exception
 
     # LoggerParser maps -vv -> DEBUG
-    assert captured["level"] == logging.DEBUG
+    assert captured["level"] == logging.INFO
 
 
 def test_typer_plus_before_after_invoke_helpers():

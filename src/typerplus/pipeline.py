@@ -4,7 +4,16 @@ import inspect
 import logging
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, Iterable, Sequence
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Iterable,
+    ParamSpec,
+    Sequence,
+    TypeVar,
+    cast,
+)
 
 import click
 import typer
@@ -24,6 +33,9 @@ from .types import (
     Middleware,
     ensure_signature,
 )
+
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 def _instantiate_parser(factory: Callable[[], Any] | type | Any | None) -> Any:
@@ -344,11 +356,11 @@ class Pipeline:
     # Building
     def build(
         self,
-        func: Callable[..., Any],
+        func: Callable[P, R],
         *,
         app: Any = None,
         name: str | None = None,
-    ) -> Callable[..., Any]:
+    ) -> Callable[P, R]:
         """Return a callable to register with Typer."""
 
         original = func
@@ -369,6 +381,9 @@ class Pipeline:
         # Ensure Typer can read the final signature
         ensure_signature(decorated)
 
+        if TYPE_CHECKING:
+            decorated = cast(Callable[P, R], decorated)
+
         # Base handler makes the actual call
         def base(inv: Invocation) -> Any:
             return inv.invoke_target()
@@ -380,8 +395,9 @@ class Pipeline:
 
         # Adapter registered with Typer; signature must match `decorated`
         @wraps(decorated)
-        def adapter(*args: Any, **kwargs: Any) -> Any:
+        def adapter(*args: P.args, **kwargs: P.kwargs) -> R:
             context = None
+            # TODO : doesn't look like typer.get_current_context exists, check versions?
             get_context = getattr(typer, "get_current_context", None)
             if callable(get_context):
                 try:

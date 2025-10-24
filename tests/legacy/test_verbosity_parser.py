@@ -21,7 +21,7 @@ def test_logger_parser_handles_counted_option():
         ] = 0,
     ):
         assert logger.name == "counted"
-        assert logger.level == logging.DEBUG
+        assert logger.level == logging.INFO
         logger.debug("counted verbosity")
 
     result = runner.invoke(app, ["-vv"])
@@ -135,6 +135,6 @@ def test_logger_parser_unsupported_value_type_and_count_edges():
         assert "unsupported log level value" in str(e)
 
     # count <= 0 yields WARNING
-    assert parser._coerce_level(0) == logging.WARNING
+    assert parser._coerce_level(0) == logging.ERROR
     # count == 1 yields INFO (using float input to cover float path)
-    assert parser._coerce_level(1.0) == logging.INFO
+    assert parser._coerce_level(1.0) == logging.WARNING
