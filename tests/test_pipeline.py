@@ -3,13 +3,14 @@ import logging
 from typing import Annotated, Any, get_args, get_origin
 
 import click
+import typer
 from typer import Option
 from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from typerplus import TyperPlus
 from typerplus.parser.logger import LoggerParser
-from typerplus.pipeline import Pipeline, _instantiate_parser
+from typerplus.pipeline import Pipeline, _ensure_context_parameter, _instantiate_parser
 from typerplus.types import CommandContext, Invocation, InvocationContext
 
 
@@ -185,6 +186,21 @@ def test_instantiate_parser_callable_invoked():
     assert calls == ["called"]
 
 
+def test_instantiate_parser_with_type_and_instance():
+    class Parser:
+        def __init__(self):
+            self.created = True
+
+    # type -> instance
+    p1 = _instantiate_parser(Parser)
+    assert isinstance(p1, Parser) and p1.created
+
+    # instance -> same object
+    inst = Parser()
+    p2 = _instantiate_parser(inst)
+    assert p2 is inst
+
+
 def test_pipeline_set_invocation_factory_replaces_invocation():
     pipeline = Pipeline()
     created: list[Invocation] = []
@@ -226,6 +242,24 @@ def test_pipeline_set_invocation_factory_replaces_invocation():
     assert wrapped() == "ok"
     assert created and created[0].state["factory"] == "custom"
     assert seen_flags == ["custom"]
+
+
+def test_ensure_context_parameter_noop_when_ctx_present_and_untyped():
+    def func(ctx, y: int):
+        return y
+
+    out = _ensure_context_parameter(func)
+    assert out is func
+    assert str(inspect.signature(out)) == str(inspect.signature(func))
+
+
+def test_ensure_context_parameter_noop_when_ctx_typed():
+    def func(ctx: typer.Context, y: int):
+        return y
+
+    out = _ensure_context_parameter(func)
+    assert out is func
+    assert str(inspect.signature(out)) == str(inspect.signature(func))
 
 
 def test_pipeline_injects_invocation_context_for_commands():
@@ -316,6 +350,18 @@ def test_pipeline_virtual_option_exposed_without_forwarding():
     assert observed["state"] is True
 
 
+def test_apply_virtual_parameters_ignores_existing_param_name():
+    p = Pipeline().add_virtual_option("flag")
+
+    def user(flag: bool = False):
+        return flag
+
+    wrapped = p.build(user)
+    sig = inspect.signature(wrapped)
+    # No duplicate param added; remains as originally declared
+    assert list(sig.parameters) == ["flag"]
+
+
 def test_pipeline_typer_plus_command_receives_invocation_context():
     pipeline = Pipeline()
 
@@ -355,6 +401,251 @@ def test_pipeline_typer_plus_command_receives_invocation_context():
     assert captured["name"] == "demo"
     assert captured["args"] == ()
     assert captured["kwargs"] == {"value": 5}
+
+
+def test_pipeline_inject_context_decorator_adds_ctx_param():
+    p = Pipeline().inject_context()
+
+    def user(x: int):
+        return x
+
+    wrapped = p.build(user)
+    sig = inspect.signature(wrapped)
+    params = list(sig.parameters)
+    assert params[0] == "ctx"
+    assert params[1] == "x"
+
+
+def test_register_param_type_without_option_factory_raises():
+    class Token(str):
+        pass
+
+    # Register a hook with no option_factory; using it must error when building
+    p = Pipeline().register_param_type(Token, option_factory=None)
+
+    def cmd(token: Token):
+        return token
+
+    try:
+        p.build(cmd)
+        raise AssertionError("Expected ValueError not raised")
+    except ValueError as e:
+        assert "missing option metadata" in str(e)
+
+
+def test_string_forward_ref_invocation_context_is_hidden():
+    p = Pipeline()
+
+    def cmd(ctx: "InvocationContext", value: int):  # noqa: F821
+        return value
+
+    wrapped = p.build(cmd)
+    sig = inspect.signature(wrapped)
+    assert list(sig.parameters) == ["value"]
+
+
+def test_add_virtual_option_without_storing_in_state():
+    p = Pipeline()
+    p.add_virtual_option("what_if", store_in_state=False)
+
+    seen: dict[str, object] = {}
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            seen.update(inv.state)
+            return next_handler(inv)
+
+        return handler
+
+    p.use(capture)
+
+    def user():
+        return "ok"
+
+    wrapped = p.build(user)
+    res = wrapped(what_if=True)
+    assert res == "ok"
+    # No state recorded since store_in_state=False
+    assert not seen
+
+
+def test_adapter_signature_not_set_when_decorated_signature_unavailable():
+    # Decorator that returns a callable whose __signature__ is invalid (not a Signature)
+    def badsig_decorator(func):
+        class BadSig:
+            __signature__ = (
+                object()
+            )  # invalid __signature__ will break inspect.signature
+
+            def __init__(self, f):
+                self._f = f
+
+            def __call__(self, *a, **k):
+                return self._f(*a, **k)
+
+        return BadSig(func)
+
+    p = Pipeline().use_decorator(badsig_decorator)
+
+    def user():
+        return "ok"
+
+    wrapped = p.build(user)
+    # Calling still works; adapter signature copy is skipped gracefully
+    assert wrapped() == "ok"
+
+
+def test_enable_logger_handles_subclass_parameter_type():
+    class MyLogger(logging.Logger):
+        pass
+
+    p = Pipeline().enable_logger()
+
+    def user(logger: MyLogger | None = None):
+        return logger
+
+    wrapped = p.build(user)
+    sig = inspect.signature(wrapped)
+    param = sig.parameters["logger"]
+    # Ensure option metadata was added to subclass annotation
+    assert param.default is None
+
+
+def test_register_param_type_does_not_override_existing_click_type():
+    import click
+
+    class Token(str):
+        pass
+
+    class TokenParser(click.ParamType):
+        name = "token"
+
+    # Pre-create option with click_type already set
+    opt = typer.Option(..., "--token")
+    opt.click_type = TokenParser()  # existing parser instance
+
+    p = Pipeline().register_param_type(
+        Token,
+        option_factory=lambda param: opt,
+        parser_factory=TokenParser,
+    )
+
+    def user(token: Token | None = None):
+        return token
+
+    wrapped = p.build(user)
+    sig = inspect.signature(wrapped)
+    option_seen = [
+        m
+        for m in sig.parameters["token"].annotation.__metadata__
+        if isinstance(m, typer.models.ParameterInfo)
+    ][0]
+    # Should preserve the existing instance
+    assert option_seen.click_type is opt.click_type
+
+
+def test_virtual_option_required_value_defaults_to_ellipsis_in_state():
+    p = Pipeline()
+    p.add_virtual_option("mode", option=typer.Option(..., "--mode"))
+
+    captured: dict[str, object] = {}
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            captured["value"] = inv.state.get("virtual:mode")
+            return next_handler(inv)
+
+        return handler
+
+    p.use(capture)
+
+    def user():
+        return "ok"
+
+    wrapped = p.build(user)
+    # Do not pass --mode; state should contain Ellipsis (not Signature.empty)
+    assert wrapped() == "ok"
+    assert captured["value"] is ...
+
+
+def test_virtual_option_missing_default_maps_to_none_in_state():
+    # Create a dummy object that mimics ParameterInfo with no default set
+    class DummyOption:
+        pass
+
+    dummy = DummyOption()
+    # No `default` attribute -> pipeline stores Signature.empty as default_value
+
+    p = Pipeline()
+    p.add_virtual_option("phantom", option=dummy)
+
+    captured: dict[str, object] = {}
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            captured["value"] = inv.state.get("virtual:phantom")
+            return next_handler(inv)
+
+        return handler
+
+    p.use(capture)
+
+    def user():
+        return "ok"
+
+    wrapped = p.build(user)
+    # Do not pass phantom; state should coerce Signature.empty -> None
+    assert wrapped() == "ok"
+    assert captured["value"] is None
+
+
+def test_adapter_context_fetch_handles_runtimeerror(monkeypatch):
+    import click as _click
+    import typer as _typer
+
+    def raise_ctx(*args, **kwargs):
+        raise RuntimeError("no ctx")
+
+    # Typer may not expose this attribute; allow creating it
+    monkeypatch.setattr(_typer, "get_current_context", raise_ctx, raising=False)
+    monkeypatch.setattr(_click, "get_current_context", raise_ctx, raising=True)
+
+    p = Pipeline()
+    seen: dict[str, object] = {}
+
+    def capture(next_handler):
+        def handler(inv: Invocation):
+            seen["context"] = inv.environment.context
+            return next_handler(inv)
+
+        return handler
+
+    p.use(capture)
+
+    def user():
+        return "ok"
+
+    wrapped = p.build(user)
+    assert wrapped() == "ok"
+    assert seen.get("context") is None
+
+
+def test_param_type_hook_and_virtuals_skip_when_signature_unavailable():
+    # Create a callable object that makes signature_of(func) return None
+    class BadSig:
+        __signature__ = object()  # non-Signature triggers inspect failure
+
+        def __call__(self):
+            return "ok"
+
+    # Register a param type and a virtual option to enter both early-return paths
+    p = Pipeline().register_param_type(int, option_factory=None)
+    p.add_virtual_option("flag")
+
+    bad = BadSig()
+    wrapped = p.build(bad)
+    # Should still be callable
+    assert wrapped() == "ok"
 
 
 def test_typer_plus_command_receives_invocation_context():

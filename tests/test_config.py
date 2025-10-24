@@ -123,3 +123,111 @@ def test_pipeline_config_merge_allows_variant_clones():
     merged = base.merge(variant_b)
     assert merged.middlewares == variant_b.middlewares
     assert merged.param_type_hooks == variant_b.param_type_hooks
+
+
+def test_pipeline_config_inject_context_adds_ctx_param():
+    cfg = PipelineConfig().inject_context()
+    pipeline = cfg.to_pipeline()
+
+    def user(x: int):
+        return x
+
+    wrapped = pipeline.build(user)
+    params = list(inspect.signature(wrapped).parameters)
+    assert params[0] == "ctx"
+    assert params[1] == "x"
+
+
+def test_pipeline_config_virtual_option_applies():
+    cfg = PipelineConfig().add_virtual_option(
+        "what_if", option=typer.Option(False, "--what-if")
+    )
+    pipeline = cfg.to_pipeline()
+
+    def user():
+        return "ok"
+
+    wrapped = pipeline.build(user)
+    sig = inspect.signature(wrapped)
+    assert "what_if" in sig.parameters
+
+
+def test_add_decorators_and_middlewares_empty_return_self():
+    cfg = PipelineConfig()
+    assert cfg.add_decorators(()) is cfg
+    assert cfg.add_middlewares(()) is cfg
+
+
+def test_merge_invocation_factory_precedence_when_other_none():
+    base = PipelineConfig().set_invocation_factory(None)
+    other = PipelineConfig()  # also None
+    merged = base.merge(other)
+    # Remains None when other has None; preserves base
+    assert merged.invocation_factory is None
+
+
+def test_pipeline_config_add_decorators_appends_and_order():
+    calls: list[str] = []
+
+    def d1(func):
+        def wrapper(*a, **k):
+            calls.append("d1")
+            return func(*a, **k)
+
+        return wrapper
+
+    def d2(func):
+        def wrapper(*a, **k):
+            calls.append("d2")
+            return func(*a, **k)
+
+        return wrapper
+
+    base = PipelineConfig()
+    cfg = base.add_decorators([d1, d2])
+    assert cfg is not base
+    assert cfg.decorators[-2:] == (d1, d2)
+
+    pipeline = cfg.to_pipeline()
+
+    def command():
+        calls.append("body")
+        return "ok"
+
+    wrapped = pipeline.build(command)
+    assert wrapped() == "ok"
+    # Decorators wrap in registration order; last added runs outermost
+    assert calls == ["d2", "d1", "body"]
+
+
+def test_pipeline_config_add_middlewares_appends_and_execution_order():
+    order: list[str] = []
+
+    def mw_a(next):
+        def handler(inv: Invocation):
+            order.append("a_pre")
+            r = next(inv)
+            order.append("a_post")
+            return r
+
+        return handler
+
+    def mw_b(next):
+        def handler(inv: Invocation):
+            order.append("b_pre")
+            r = next(inv)
+            order.append("b_post")
+            return r
+
+        return handler
+
+    cfg = PipelineConfig().add_middlewares([mw_a, mw_b])
+    pipeline = cfg.to_pipeline()
+
+    def command():
+        order.append("call")
+        return "ok"
+
+    wrapped = pipeline.build(command)
+    assert wrapped() == "ok"
+    assert order == ["a_pre", "b_pre", "call", "b_post", "a_post"]
