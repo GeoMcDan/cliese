@@ -4,5 +4,13 @@
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "coverage-gutters.coverageReportFileName": "coverage.xml"
+    "coverage-gutters.coverageFileNames": [
+        "coverage.lcov",
+        "lcov.info",
+        "cov.xml",
+        "coverage.xml",
+        "cobertura.xml",
+        "jacoco.xml",
+        "coverage.cobertura.xml"
+    ]
 }
