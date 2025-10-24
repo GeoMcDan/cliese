@@ -4,6 +4,9 @@ import inspect
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Protocol
 
+from .signature import ensure_signature as _ensure_signature_impl
+from .signature import exec_signature as _exec_signature_impl
+
 # Core invocation types
 
 
@@ -98,7 +101,6 @@ class Invocation:
     def resolve_call_arguments(self) -> tuple[tuple[Any, ...], dict[str, Any]]:
         """Return (args, kwargs) including any framework-managed injections."""
 
-        original_sig = getattr(self.target, "__typerplus_original_signature__", None)
         context_param_names: tuple[str, ...] = getattr(
             self.target, "__typerplus_context_param_names__", ()
         )
@@ -106,7 +108,9 @@ class Invocation:
             self.target, "__typerplus_virtual_param_names__", ()
         )
 
-        exec_sig = original_sig or inspect.signature(self.target)
+        # Prefer the original signature if one was recorded; otherwise fall back
+        # to the current visible signature of the target.
+        exec_sig = _exec_signature_impl(self.target)
         context_names_set = set(context_param_names)
         virtual_names_set = set(virtual_param_names)
 
@@ -255,14 +259,8 @@ class InvocationFactory(Protocol):
 def ensure_signature(func: Callable[..., Any]) -> Callable[..., Any]:
     """Ensure the callable exposes a concrete inspect.Signature.
 
-    If the callable lacks a __signature__, one is derived via inspect.signature.
-    This helps Typer read the correct signature when wrappers are involved.
+    Delegates to `typerplus.signature.ensure_signature` and returns `func`.
     """
 
-    if getattr(func, "__signature__", None) is None:
-        try:
-            sig = inspect.signature(func)
-        except (TypeError, ValueError):  # builtins or callables without signature
-            return func
-        func.__signature__ = sig
+    _ensure_signature_impl(func)
     return func
