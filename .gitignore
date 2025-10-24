@@ -11,3 +11,4 @@ wheels/
 .coverage
 .gitignore
 coverage.xml
+coverage.lcov

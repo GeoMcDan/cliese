@@ -10,6 +10,7 @@ import click
 import typer
 from typer.models import ParameterInfo
 
+from . import signature as sigutil
 from .annotation import TyperAnnotation
 from .types import (
     CommandContext,
@@ -43,7 +44,9 @@ def _create_param_type_hook(
     """Return a decorator that amends matching parameters with Option metadata."""
 
     def ensure(func: Callable[..., Any]) -> Callable[..., Any]:
-        sig = inspect.signature(func)
+        sig = sigutil.signature_of(func)
+        if sig is None:
+            return func
         params = []
         touched = False
 
@@ -80,9 +83,7 @@ def _create_param_type_hook(
                 option.click_type = _instantiate_parser(parser_factory)
 
             new_annotation = annot.rebuild(annotations=metadata)
-            default = param.default
-            if default is inspect.Signature.empty:
-                default = None
+            default = sigutil.default_or(param.default, None)
 
             params.append(param.replace(annotation=new_annotation, default=default))
             touched = True
@@ -90,7 +91,7 @@ def _create_param_type_hook(
         if not touched:
             return func
 
-        func.__signature__ = sig.replace(parameters=params)
+        sigutil.set_signature(func, sig.replace(parameters=params))
         return func
 
     return ensure
@@ -134,7 +135,9 @@ def _apply_virtual_parameters(
     if not params:
         return func
 
-    sig = inspect.signature(func)
+    sig = sigutil.signature_of(func)
+    if sig is None:
+        return func
     existing_params = list(sig.parameters.values())
     existing_names = {param.name for param in existing_params}
 
@@ -148,7 +151,7 @@ def _apply_virtual_parameters(
     if not added:
         return func
 
-    func.__signature__ = sig.replace(parameters=existing_params)
+    sigutil.set_signature(func, sig.replace(parameters=existing_params))
     current = getattr(func, "__typerplus_virtual_param_names__", ())
     func.__typerplus_virtual_param_names__ = tuple(current) + tuple(added)
     return func
@@ -178,7 +181,9 @@ def _ensure_invocation_context_parameter(
     if getattr(func, "__typerplus_context_param_names__", None):
         return func
 
-    sig = inspect.signature(func)
+    sig = sigutil.signature_of(func)
+    if sig is None:
+        return func
     context_params: list[inspect.Parameter] = []
     remaining_params: list[inspect.Parameter] = []
 
@@ -192,14 +197,12 @@ def _ensure_invocation_context_parameter(
         return func
 
     runtime_sig = sig.replace(parameters=remaining_params)
-    setattr(func, "__typerplus_original_signature__", sig)
-    setattr(func, "__typerplus_runtime_signature__", runtime_sig)
-    setattr(
+    sigutil.apply_runtime_view(
         func,
-        "__typerplus_context_param_names__",
-        tuple(param.name for param in context_params),
+        original=sig,
+        runtime=runtime_sig,
+        hidden_names=tuple(param.name for param in context_params),
     )
-    func.__signature__ = runtime_sig
     return func
 
 
@@ -407,16 +410,15 @@ class Pipeline:
             for virtual in current_virtual_params:
                 if virtual.state_key:
                     value = inv.call.kwargs.get(virtual.name, virtual.default_value)
-                    if value is inspect.Signature.empty:
+                    if sigutil.is_empty(value):
                         value = None
                     inv.state[virtual.state_key] = value
             return handler(inv)
 
         # Guarantee Typer sees the signature from `decorated` even with wraps
-        try:
-            adapter.__signature__ = inspect.signature(decorated)
-        except (TypeError, ValueError):
-            pass
+        sig = sigutil.signature_of(decorated)
+        if sig is not None:
+            sigutil.set_signature(adapter, sig)
 
         return adapter
 
@@ -432,7 +434,9 @@ def _looks_like_context_param(param: inspect.Parameter) -> bool:
 def _ensure_context_parameter(func: Callable[..., Any]) -> Callable[..., Any]:
     """Ensure a Typer/click context parameter is present in the callable signature."""
 
-    sig = inspect.signature(func)
+    sig = sigutil.signature_of(func)
+    if sig is None:
+        return func
     if any(_looks_like_context_param(param) for param in sig.parameters.values()):
         return func
 
@@ -445,8 +449,11 @@ def _ensure_context_parameter(func: Callable[..., Any]) -> Callable[..., Any]:
         kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
         annotation=typer.Context,
     )
-    wrapper.__signature__ = sig.replace(
-        parameters=[ctx_param, *sig.parameters.values()],
-        return_annotation=sig.return_annotation,
+    sigutil.set_signature(
+        wrapper,
+        sig.replace(
+            parameters=[ctx_param, *sig.parameters.values()],
+            return_annotation=sig.return_annotation,
+        ),
     )
     return wrapper
