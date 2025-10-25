@@ -9,6 +9,7 @@ from typer.models import ParameterInfo
 from typer.testing import CliRunner
 
 from typerplus import TyperPlus
+from typerplus.annotation import TyperAnnotation
 from typerplus.parser.logger import LoggerParser
 from typerplus.pipeline import (
     Pipeline,
@@ -159,6 +160,140 @@ def test_pipeline_enable_logger_updates_existing_option():
 
     assert extracted is option, "Should be the same option object"
     assert isinstance(option.click_type, LoggerParser), "Expected click_type update"
+
+
+def test_pipeline_add_signature_transform_appends_decorator():
+    pipeline = Pipeline()
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    returned = pipeline.add_signature_transform(decorator)
+    assert returned is pipeline
+    assert pipeline._decorators[-1] is decorator
+
+
+def test_param_resolver_middleware_returns_when_resolvers_missing():
+    pipeline = Pipeline()
+
+    def should_not_run(*_):
+        raise RuntimeError("resolver should not execute")
+
+    pipeline.register_param_resolver(lambda *_: True, should_not_run)
+    pipeline._param_resolvers.clear()
+
+    def user(value: int):
+        return value
+
+    wrapped = pipeline.build(user)
+    assert wrapped(value=5) == 5
+
+
+def test_param_resolver_middleware_skips_when_signature_unavailable(monkeypatch):
+    pipeline = Pipeline()
+    called: dict[str, bool] = {"resolve": False}
+
+    def matcher(param: inspect.Parameter, annotation: Any) -> bool:
+        return True
+
+    def resolver(
+        inv: Invocation, param: inspect.Parameter, annotation: Any, value: Any
+    ) -> Any:
+        called["resolve"] = True
+        return value
+
+    pipeline.register_param_resolver(matcher, resolver)
+    monkeypatch.setattr(
+        "typerplus.pipeline.sigutil.exec_signature", lambda target: None
+    )
+
+    def user(value: int):
+        return value + 1
+
+    wrapped = pipeline.build(user)
+    assert wrapped(value=3) == 4
+    assert not called["resolve"]
+
+
+def test_param_resolver_middleware_ignores_parameters_missing_from_kwargs():
+    pipeline = Pipeline()
+    resolved: list[str] = []
+
+    def matcher(param: inspect.Parameter, annotation: Any) -> bool:
+        return param.name == "b"
+
+    def resolver(
+        inv: Invocation, param: inspect.Parameter, annotation: Any, value: Any
+    ) -> Any:
+        resolved.append(param.name)
+        return value + 10
+
+    pipeline.register_param_resolver(matcher, resolver)
+
+    def user(a: int, b: int):
+        return a, b
+
+    wrapped = pipeline.build(user)
+    assert wrapped(1, b=2) == (1, 12)
+    assert resolved == ["b"]
+
+
+def test_enable_logger_matcher_handles_typeerror(monkeypatch):
+    pipeline = Pipeline().enable_logger()
+    entry = pipeline._param_resolvers[-1]
+
+    param = inspect.Parameter(
+        "logger",
+        kind=inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        annotation=logging.Logger,
+    )
+    annotation = TyperAnnotation(param.annotation)
+
+    def boom(subclass, cls):
+        raise TypeError("boom")
+
+    monkeypatch.setattr("builtins.issubclass", boom)
+    assert not entry.matches(param, annotation)
+
+
+def test_enable_logger_resolver_falls_back_to_default_parser():
+    def option_factory(param: inspect.Parameter) -> ParameterInfo:
+        option = typer.Option(..., "--verbose", "-v", count=True)
+        option.click_type = object()
+        return option
+
+    def parser_factory():
+        return object()
+
+    pipeline = Pipeline().enable_logger(
+        option_factory=option_factory,
+        parser_factory=parser_factory,
+    )
+
+    captured: dict[str, logging.Logger] = {}
+
+    def user(logger: logging.Logger | None = None):
+        captured["logger"] = logger
+        return logger
+
+    wrapped = pipeline.build(user)
+    logger_obj = wrapped(logger=None)
+
+    assert isinstance(logger_obj, logging.Logger)
+    assert captured["logger"] is logger_obj
+    assert logger_obj.level == logging.ERROR
+
+
+def test_ensure_context_parameter_handles_missing_signature(monkeypatch):
+    def user():
+        return "ok"
+
+    monkeypatch.setattr("typerplus.pipeline.sigutil.signature_of", lambda func: None)
+    wrapped = _ensure_context_parameter(user)
+    assert wrapped is user
 
 
 def test_pipeline_register_param_type_custom_parser():
