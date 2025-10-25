@@ -125,11 +125,24 @@ def test_pipeline_enable_logger_adds_option_when_missing():
     assert isinstance(option.click_type, LoggerParser), "click_type missing"
     # Option default should be available for Typer to treat as optional.
     assert getattr(option, "count", False), "count expecte True"
+    assert option.callback is None, "callback should not be set"
 
 
-#   Pipeline doesn't do the argument injection, i guess
-#    logger = wrapped()
-#    assert logger is not None, "Logger expected not None"
+def test_pipeline_enable_logger_injects_default_logger_runtime():
+    pipeline = Pipeline().enable_logger()
+
+    captured: dict[str, logging.Logger] = {}
+
+    def user(logger: logging.Logger | None = None):
+        captured["logger"] = logger
+        return logger
+
+    wrapped = pipeline.build(user)
+    result = wrapped(logger=None)
+
+    assert isinstance(result, logging.Logger)
+    assert captured["logger"] is result
+    assert result.level == logging.ERROR
 
 
 def test_pipeline_enable_logger_updates_existing_option():
