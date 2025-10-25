@@ -121,10 +121,15 @@ def test_pipeline_enable_logger_adds_option_when_missing():
     param = sig.parameters["logger"]
     option = _option_from_annotation(param.annotation)
 
-    assert option is not None
-    assert isinstance(option.click_type, LoggerParser)
+    assert option is not None, "Option annotation missing"
+    assert isinstance(option.click_type, LoggerParser), "click_type missing"
     # Option default should be available for Typer to treat as optional.
-    assert getattr(option, "count", False)
+    assert getattr(option, "count", False), "count expecte True"
+
+
+#   Pipeline doesn't do the argument injection, i guess
+#    logger = wrapped()
+#    assert logger is not None, "Logger expected not None"
 
 
 def test_pipeline_enable_logger_updates_existing_option():
@@ -139,8 +144,8 @@ def test_pipeline_enable_logger_updates_existing_option():
     param = sig.parameters["logger"]
     extracted = _option_from_annotation(param.annotation)
 
-    assert extracted is option
-    assert isinstance(option.click_type, LoggerParser)
+    assert extracted is option, "Should be the same option object"
+    assert isinstance(option.click_type, LoggerParser), "Expected click_type update"
 
 
 def test_pipeline_register_param_type_custom_parser():
@@ -537,7 +542,21 @@ def test_enable_logger_handles_subclass_parameter_type():
     sig = inspect.signature(wrapped)
     param = sig.parameters["logger"]
     # Ensure option metadata was added to subclass annotation
-    assert param.default is None
+    assert param.default is None, "logger default should be None"
+    assert param.annotation is not None, "logger annotation should not be None"
+    assert param.annotation is not inspect.Parameter.empty, (
+        "logger annotation should not be empty"
+    )
+
+    from typing import Union, get_args, get_origin
+
+    orig = get_origin(param.annotation)
+    assert orig is Annotated, "Parameter annotation should be 'Annotated'"
+    typ, args = get_args(param.annotation)
+    orig = get_origin(typ)
+    assert orig is Union, "Annotated should be Optional/Union"
+    typ, _ = get_args(typ)
+    assert typ is MyLogger, "First Option/Union argument should be MyLogger"
 
 
 def test_register_param_type_does_not_override_existing_click_type():
