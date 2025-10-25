@@ -97,6 +97,24 @@ def test_typer_plus_enable_logger_adds_option_and_parser():
     assert captured["level"] == logging.INFO
 
 
+def test_typer_plus_enable_logger_provides_default_logger():
+    captured = {}
+    app = TyperPlus()
+    app.enable_logger()
+
+    @app.command()
+    def hello(logger: logging.Logger):
+        captured["logger"] = logger
+        captured["level"] = logger.level
+
+    result = runner.invoke(app, [])
+    if result.exception:
+        raise result.exception
+
+    assert captured["logger"] is not None
+    assert captured["level"] == logging.ERROR
+
+
 def test_typer_plus_before_after_invoke_helpers():
     order: list[str] = []
     app = TyperPlus()

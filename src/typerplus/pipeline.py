@@ -117,6 +117,12 @@ class _VirtualParameter:
     default_value: Any
 
 
+@dataclass(frozen=True)
+class _ParamResolver:
+    matches: Callable[[inspect.Parameter, TyperAnnotation], bool]
+    resolve: Callable[[Invocation, inspect.Parameter, TyperAnnotation, Any], Any]
+
+
 def _default_virtual_option(name: str, *, default: Any = False) -> ParameterInfo:
     flag = f"--{name.replace('_', '-')}"
     kwargs: dict[str, Any] = {
@@ -265,6 +271,8 @@ class Pipeline:
         self._middlewares: list[Middleware] = list(middlewares or [])
         self._param_hooks: list[Decorator] = []
         self._virtual_params: list[_VirtualParameter] = []
+        self._param_resolvers: list[_ParamResolver] = []
+        self._param_resolver_middleware_registered = False
         self._invocation_factory: InvocationFactory = (
             invocation_factory or _default_invocation_factory
         )
@@ -302,6 +310,52 @@ class Pipeline:
         hook = _create_param_type_hook(param_type, option_factory, parser_factory)
         self._param_hooks.append(hook)
         return self
+
+    def register_param_resolver(
+        self,
+        matcher: Callable[[inspect.Parameter, TyperAnnotation], bool],
+        resolver: Callable[[Invocation, inspect.Parameter, TyperAnnotation, Any], Any],
+    ) -> "Pipeline":
+        """Register a runtime resolver that can replace parameter values before invocation."""
+
+        self._param_resolvers.append(_ParamResolver(matcher, resolver))
+        self._ensure_param_resolver_middleware()
+        return self
+
+    def _ensure_param_resolver_middleware(self) -> None:
+        if self._param_resolver_middleware_registered:
+            return
+
+        def middleware(next_handler: CommandHandler) -> CommandHandler:
+            def handler(inv: Invocation) -> Any:
+                if not self._param_resolvers:
+                    return next_handler(inv)
+
+                sig = sigutil.exec_signature(inv.target)
+                if sig is None:
+                    return next_handler(inv)
+
+                kwargs = inv.call.kwargs
+                if not kwargs:
+                    return next_handler(inv)
+
+                for name, param in sig.parameters.items():
+                    if name not in kwargs:
+                        continue
+                    annotation = TyperAnnotation(param.annotation)
+                    current = kwargs.get(name)
+                    for entry in self._param_resolvers:
+                        if not entry.matches(param, annotation):
+                            continue
+                        kwargs[name] = entry.resolve(inv, param, annotation, current)
+                        break
+
+                return next_handler(inv)
+
+            return handler
+
+        self._middlewares.append(middleware)
+        self._param_resolver_middleware_registered = True
 
     def add_virtual_option(
         self,
@@ -349,9 +403,44 @@ class Pipeline:
 
         option_factory = option_factory or _default_logger_option
         parser_factory = parser_factory or LoggerParser
-        return self.register_param_type(
+
+        self.register_param_type(
             logging.Logger, option_factory=option_factory, parser_factory=parser_factory
         )
+        parser_factory_ref = parser_factory
+
+        def matcher(param: inspect.Parameter, annotation: TyperAnnotation) -> bool:
+            target_type = annotation.type
+            if isinstance(target_type, type):
+                try:
+                    return issubclass(target_type, logging.Logger)
+                except TypeError:
+                    return False
+            return False
+
+        def resolver(
+            inv: Invocation,
+            param: inspect.Parameter,
+            annotation: TyperAnnotation,
+            value: Any,
+        ) -> logging.Logger:
+            if isinstance(value, logging.Logger):
+                return value
+
+            parameter_info = next(annotation.find_parameter_info_arg(), None)
+            parser = (
+                getattr(parameter_info, "click_type", None) if parameter_info else None
+            )
+            if parser is None or not hasattr(parser, "convert"):
+                parser = _instantiate_parser(parser_factory_ref)
+                if parser is None or not hasattr(parser, "convert"):
+                    parser = LoggerParser()
+
+            raw_value = 0 if value is None else value
+            context = inv.environment.context
+            return parser.convert(raw_value, None, context)
+
+        return self.register_param_resolver(matcher, resolver)
 
     # Building
     def build(
