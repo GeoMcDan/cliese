@@ -1,6 +1,5 @@
 """Project package exposing CLI pipeline utilities alongside legacy modules."""
 
-from . import legacy
 from .config import PipelineConfig
 from .core import TyperPlus
 from .pipeline import Pipeline
