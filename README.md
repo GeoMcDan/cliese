@@ -1,19 +1,16 @@
 # Typer Plus
 
-<!-- BADGIE TIME -->
-
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
-
-<!-- END BADGIE TIME -->
 ![codecov](https://img.shields.io/codecov/c/github/geomcdan/cliese/main)
-![license](https://badgen.net/github/license/geomcdan/cliese)
-![tag](https://badgen.net/github/tag/geomcdan/cliese)
-![checks](https://badgen.net/github/checks/geomcdan/cliese/main)
-![commit](https://badgen.net/github/last-commit/geomcdan/cliese)
+![license](https://img.shields.io/github/license/geomcdan/cliese)
+![latest tag](https://img.shields.io/github/v/tag/geomcdan/cliese)
+![checks](https://img.shields.io/github/check-runs/geomcdan/cliese/main)
+![last commit](https://img.shields.io/github/last-commit/geomcdan/cliese)
 ![commits](https://badgen.net/github/commits/geomcdan/cliese)
 ![prs](https://badgen.net/github/closed-prs/geomcdan/cliese)
 ![version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FGeoMcDan%2Fcliese%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)
 ![commitactivity](https://img.shields.io/github/commit-activity/m/geomcdan/cliese)
+
 
 **Pipeline-powered CLIs without giving up Typer's ergonomics.** Typer Plus layers a middleware pipeline on top of `typer.Typer` so you can shape signatures, inject dependencies, and coordinate cross-cutting behavior while keeping command functions clean.
 
